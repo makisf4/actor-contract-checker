@@ -11,6 +11,7 @@ import { exportReportText } from '../domain/report/exportReportText';
 import { getRiskTitle } from '../domain/risks/riskMetadata';
 import { postProcessRisks } from '../domain/risks/riskPostProcess';
 import { ContractTypeId, coerceContractTypeId, getContractTypeLabel } from '../domain/contractType/contractTypes';
+import { toGreekAllCaps } from '../utils/greekText';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Report'>;
 
@@ -24,6 +25,19 @@ const severityLabels: Record<string, string> = {
   moderate: 'Μέτριο',
   important: 'Σημαντικό',
   critical: 'Κρίσιμο',
+};
+
+const toSentenceCase = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+  let formatted = trimmed.toLocaleLowerCase('el-GR');
+  formatted = formatted.replace(/\bai\b/gi, 'AI');
+  formatted = formatted.replace(/\btvc\b/gi, 'TVC');
+  formatted = formatted.replace(/\btv\b/gi, 'TV');
+  formatted = formatted.replace(/\bvod\b/gi, 'VOD');
+  return formatted.charAt(0).toLocaleUpperCase('el-GR') + formatted.slice(1);
 };
 
 // Helper function to get severity label in Greek
@@ -90,7 +104,8 @@ export default function ReportScreen() {
     })),
   });
 
-  const MISSING_TEXT = 'Δεν προκύπτει από το κείμενο';
+  const MISSING_TEXT_VALUE = 'Δεν προκύπτει από το κείμενο';
+  const MISSING_TEXT_DISPLAY = 'Δεν εντοπίστηκε σαφής αναφορά στο κείμενο';
   const missingSummaryFieldIds = summaryFields
     .map(field => field.id)
     .filter((fieldId) => {
@@ -100,7 +115,7 @@ export default function ReportScreen() {
       }
       if (typeof value === 'string') {
         const trimmed = value.trim();
-        return trimmed.length === 0 || trimmed === MISSING_TEXT;
+        return trimmed.length === 0 || trimmed === MISSING_TEXT_VALUE;
       }
       return true;
     });
@@ -214,14 +229,14 @@ export default function ReportScreen() {
       if (typeof value === 'string' && value.trim().length > 0) {
         return value;
       }
-      return MISSING_TEXT;
+      return MISSING_TEXT_DISPLAY;
     };
 
     return (
       <Card style={styles.card}>
         <Card.Content>
           <Text variant="titleLarge" style={styles.sectionTitle}>
-            Περίληψη Βασικών Όρων
+            {toGreekAllCaps('Περίληψη Βασικών Όρων')}
           </Text>
           <Chip icon="file-document" style={styles.categoryChip}>
             Τύπος: {getContractTypeLabel(contractTypeId)}
@@ -245,16 +260,18 @@ export default function ReportScreen() {
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleLarge" style={styles.sectionTitle}>
-              Σημεία Προσοχής
+              {toGreekAllCaps('Σημεία Προσοχής')}
             </Text>
             {processedRiskFlags.map((flag, idx) => (
               <View key={idx} style={styles.riskItem}>
                 <View style={styles.riskHeader}>
                   <SeverityBadge severity={flag.severity} />
-                  <Text variant="titleMedium" style={styles.riskCategoryTitle}>{flag.title || getRiskTitle(flag.id)}</Text>
+                  <Text variant="titleMedium" style={styles.riskCategoryTitle}>
+                    {toSentenceCase(flag.title || getRiskTitle(flag.id))}
+                  </Text>
                 </View>
                 <Text variant="bodyMedium" style={styles.riskDescription}>
-                  {flag.why || 'Δεν προκύπτει από το κείμενο'}
+                  {flag.why || MISSING_TEXT_DISPLAY}
                 </Text>
                 {flag.clauseRef && (
                   <Text variant="bodyMedium" style={styles.clauseText}>
@@ -271,16 +288,21 @@ export default function ReportScreen() {
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleLarge" style={styles.sectionTitle}>
-              Ρήτρες που Απουσιάζουν
+              {toGreekAllCaps('Σημεία προς διευκρίνιση')}
+            </Text>
+            <Text variant="bodySmall" style={styles.sectionHelper}>
+              Όροι που δεν εντοπίστηκαν στο κείμενο και ενδέχεται να χρειάζονται διευκρίνιση.
             </Text>
             {missingClausesFromSummary.map((missing, idx) => (
               <View key={idx} style={styles.missingItem}>
-                <Text variant="titleMedium" style={styles.missingClauseTitle}>{missing.title}</Text>
+                <Text variant="titleMedium" style={styles.missingClauseTitle}>
+                  {toSentenceCase(missing.title)}
+                </Text>
                 <Text variant="bodySmall" style={styles.whyItMatters}>
                   {missing.why}
                 </Text>
                 <Text variant="bodySmall" style={styles.clauseText}>
-                  Πρόταση: {missing.ask}
+                  Τι να ζητήσεις: {missing.ask}
                 </Text>
               </View>
             ))}
@@ -292,11 +314,11 @@ export default function ReportScreen() {
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleLarge" style={styles.sectionTitle}>
-              Ερωτήσεις προς Υποβολή
+              {toGreekAllCaps('Ερωτήσεις προς Υποβολή')}
             </Text>
             {analysisResult.questions.map((question, idx) => (
               <Text key={idx} variant="bodyMedium" style={styles.questionItem}>
-                • {question}
+                • Τι να ζητήσεις: {question}
               </Text>
             ))}
           </Card.Content>
@@ -307,12 +329,12 @@ export default function ReportScreen() {
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleLarge" style={styles.sectionTitle}>
-              Προτάσεις προς Διαπραγμάτευση
+              {toGreekAllCaps('Προτάσεις προς Διαπραγμάτευση')}
             </Text>
             {analysisResult.negotiation.map((suggestion, idx) => (
               <View key={idx} style={styles.suggestionItem}>
                 <Text variant="titleMedium" style={styles.suggestionIssue}>
-                  {suggestion.title}
+                  {toSentenceCase(suggestion.title)}
                 </Text>
                 {suggestion.current && (
                   <View style={styles.wordingBox}>
@@ -329,7 +351,7 @@ export default function ReportScreen() {
                   </Text>
                 </View>
                 <View style={[styles.wordingBox, styles.suggestedBox]}>
-                  <Text variant="labelSmall">Προτεινόμενη:</Text>
+                  <Text variant="labelSmall">Πρόταση:</Text>
                   <Text variant="bodySmall" style={styles.wordingText}>
                     {suggestion.proposed}
                   </Text>
@@ -434,7 +456,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    marginBottom: 16,
+    marginTop: 10,
+    marginBottom: 14,
+    fontSize: 23,
+  },
+  sectionHelper: {
+    color: '#444',
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+    marginBottom: 12,
   },
   summaryItem: {
     marginBottom: 12,
@@ -453,11 +484,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   riskCategoryTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     flex: 1,
   },
   severityBadge: {
@@ -467,19 +498,25 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   riskDescription: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#444',
+    marginTop: 4,
     marginBottom: 8,
   },
   whyItMatters: {
-    color: '#555',
+    color: '#444',
+    fontSize: 14,
+    fontWeight: '400',
     marginTop: 6,
-    marginBottom: 4,
+    marginBottom: 6,
     lineHeight: 18,
   },
   clauseText: {
-    color: '#555',
-    fontStyle: 'italic',
-    marginTop: 6,
+    color: '#444',
     fontSize: 14,
+    fontWeight: '400',
+    marginTop: 6,
     lineHeight: 20,
   },
   missingItem: {
@@ -490,7 +527,7 @@ const styles = StyleSheet.create({
   },
   missingClauseTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     flex: 1,
   },
   categoryChip: {
@@ -508,8 +545,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e0e0e0',
   },
   suggestionIssue: {
-    marginBottom: 12,
-    color: '#6200ee',
+    marginBottom: 10,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#222',
   },
   wordingBox: {
     backgroundColor: '#f5f5f5',
