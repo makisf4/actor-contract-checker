@@ -217,7 +217,8 @@ npm start
 Create a `.env` file (optional, for production):
 
 ```
-EXPO_PUBLIC_LLM_API_KEY=your_api_key
+EXPO_PUBLIC_LLM_API_KEY=REPLACE_ME
+⚠️ Μην βάζεις ποτέ πραγματικό API key σε public repo. Χρησιμοποίησε τοπικό .env αρχείο.
 EXPO_PUBLIC_LLM_API_URL=https://api.openai.com/v1/chat/completions
 ```
 
