@@ -176,6 +176,8 @@ export default function ReportScreen() {
       const titleKey = normalizeTitle(item.title);
       return arr.findIndex(other => normalizeTitle(other.title) === titleKey) === index;
     });
+  const hasRiskFlags = processedRiskFlags.length > 0;
+  const hasMissingClauses = missingClausesFromSummary.length > 0;
 
   if (!analysisResult) {
     return (
@@ -256,13 +258,13 @@ export default function ReportScreen() {
     <ScrollView style={styles.container}>
       {renderSummary()}
 
-      {processedRiskFlags.length > 0 && (
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.sectionTitle}>
-              {toGreekAllCaps('Σημεία Προσοχής')}
-            </Text>
-            {processedRiskFlags.map((flag, idx) => (
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text variant="titleLarge" style={styles.sectionTitle}>
+            {toGreekAllCaps('Σημεία Προσοχής')}
+          </Text>
+          {hasRiskFlags ? (
+            processedRiskFlags.map((flag, idx) => (
               <View key={idx} style={styles.riskItem}>
                 <View style={styles.riskHeader}>
                   <SeverityBadge severity={flag.severity} />
@@ -279,21 +281,25 @@ export default function ReportScreen() {
                   </Text>
                 )}
               </View>
-            ))}
-          </Card.Content>
-        </Card>
-      )}
+            ))
+          ) : (
+            <Text variant="bodySmall" style={styles.emptyStateText}>
+              Δεν εντοπίστηκαν σημεία που να απαιτούν προσοχή με βάση το παρόν κείμενο.
+            </Text>
+          )}
+        </Card.Content>
+      </Card>
 
-      {missingClausesFromSummary.length > 0 && (
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.sectionTitle}>
-              {toGreekAllCaps('Σημεία προς διευκρίνιση')}
-            </Text>
-            <Text variant="bodySmall" style={styles.sectionHelper}>
-              Όροι που δεν εντοπίστηκαν στο κείμενο και ενδέχεται να χρειάζονται διευκρίνιση.
-            </Text>
-            {missingClausesFromSummary.map((missing, idx) => (
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text variant="titleLarge" style={styles.sectionTitle}>
+            {toGreekAllCaps('Σημεία προς διευκρίνιση')}
+          </Text>
+          <Text variant="bodySmall" style={styles.sectionHelper}>
+            Όροι που δεν εντοπίστηκαν στο κείμενο και ενδέχεται να χρειάζονται διευκρίνιση.
+          </Text>
+          {hasMissingClauses ? (
+            missingClausesFromSummary.map((missing, idx) => (
               <View key={idx} style={styles.missingItem}>
                 <Text variant="titleMedium" style={styles.missingClauseTitle}>
                   {toSentenceCase(missing.title)}
@@ -305,10 +311,14 @@ export default function ReportScreen() {
                   Τι να ζητήσεις: {missing.ask}
                 </Text>
               </View>
-            ))}
-          </Card.Content>
-        </Card>
-      )}
+            ))
+          ) : (
+            <Text variant="bodySmall" style={styles.emptyStateText}>
+              Δεν προέκυψαν σημεία προς διευκρίνιση με βάση το παρόν κείμενο.
+            </Text>
+          )}
+        </Card.Content>
+      </Card>
 
       {analysisResult.questions.length > 0 && (
         <Card style={styles.card}>
@@ -363,7 +373,7 @@ export default function ReportScreen() {
       )}
 
       {analysisResult ? (
-        <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
+        <View style={styles.copyActionContainer}>
           <Pressable
             onPress={onCopyReport}
             style={{
@@ -467,6 +477,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 12,
   },
+  emptyStateText: {
+    color: '#444',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 4,
+  },
   summaryItem: {
     marginBottom: 12,
   },
@@ -528,6 +544,7 @@ const styles = StyleSheet.create({
   missingClauseTitle: {
     fontSize: 18,
     fontWeight: '700',
+    marginBottom: 4,
     flex: 1,
   },
   categoryChip: {
@@ -564,7 +581,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   buttonContainer: {
+    marginTop: 4,
     marginBottom: 16,
+  },
+  copyActionContainer: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 12,
   },
   button: {
     marginBottom: 8,
