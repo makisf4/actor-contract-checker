@@ -7,7 +7,7 @@ import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
 import { getContractTypeLabel } from '../domain/contractType/contractTypes';
 import { detectMultiContractLikelihood } from '../domain/analysis/multiContractHeuristics';
-import { shouldWarnUnredactedCompany } from '../utils/privacyValidation';
+import { hasAnyUnredactedEntities } from '../utils/privacyValidation';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'RedactionPreview'>;
 
@@ -60,14 +60,12 @@ export default function RedactionPreviewScreen() {
       return;
     }
 
-    if (shouldWarnUnredactedCompany(originalText, redactedText, detectedEntities)) {
+    const redactionCheck = hasAnyUnredactedEntities(originalText, redactedText, detectedEntities);
+    if (!redactionCheck.ok) {
       Alert.alert(
         'Προσοχή',
-        'Εντοπίστηκε πιθανή επωνυμία εταιρείας που δεν ανωνυμοποιήθηκε. Ελέγξτε το preview πριν συνεχίσετε.',
-        [
-          { text: 'Ακύρωση', style: 'cancel' },
-          { text: 'Συνέχεια', onPress: startConfirmationFlow },
-        ]
+        'Εντοπίστηκαν στοιχεία που δεν έχουν ανωνυμοποιηθεί πλήρως. Παρακαλούμε ελέγξτε το κείμενο πριν συνεχίσετε.',
+        [{ text: 'Επιστροφή στην Προεπισκόπηση', style: 'cancel' }]
       );
       return;
     }

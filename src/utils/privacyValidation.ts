@@ -20,35 +20,25 @@ function normalizeText(text: string): string {
  * Strips all placeholders from text to check for unredacted content
  */
 function stripPlaceholders(text: string): string {
-  // Remove neutral placeholder: XXXXXX
-  let stripped = text.replace(/XXXXXX/g, '');
+  // Remove neutral placeholders: XXXXXX or longer merged masks
+  let stripped = text.replace(/X{6,}/g, '');
   
   return stripped;
 }
 
 /**
- * Checks if a detected company entity's raw value still exists in the redacted text
+ * Checks if a detected entity's raw value still exists in the redacted text
  */
-function isCompanyValueStillPresent(
-  rawValue: string,
+function isEntityValueStillPresent(
+  entity: DetectedEntity,
   redactedText: string,
-  originalText: string,
-  entity: DetectedEntity
+  originalText: string
 ): boolean {
-  // Normalize the raw value
-  const normalizedRaw = normalizeText(rawValue);
-  
-  // If normalized raw is empty or too short, skip
+  const extractedRaw = originalText.substring(entity.startIndex, entity.endIndex);
+  const normalizedRaw = normalizeText(extractedRaw);
   if (normalizedRaw.length < 2) {
     return false;
   }
-  
-  // Extract raw value from original text using indices (more reliable)
-  const extractedRaw = originalText.substring(entity.startIndex, entity.endIndex);
-  const normalizedExtracted = normalizeText(extractedRaw);
-  
-  // Use the extracted value if available, otherwise use provided rawValue
-  const valueToCheck = normalizedExtracted || normalizedRaw;
   
   // Strip placeholders from redacted text
   const strippedRedacted = stripPlaceholders(redactedText);
@@ -58,10 +48,14 @@ function isCompanyValueStillPresent(
   
   // Check if the normalized raw value exists in normalized redacted text
   // Use word boundaries to avoid partial matches
-  const escapedValue = valueToCheck.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedValue = normalizedRaw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`\\b${escapedValue}\\b`, 'i');
   
-  return pattern.test(normalizedRedacted);
+  if (pattern.test(normalizedRedacted)) {
+    return true;
+  }
+
+  return normalizedRedacted.includes(normalizedRaw);
 }
 
 /**
@@ -87,17 +81,32 @@ export function shouldWarnUnredactedCompany(
   
   // Check each detected company entity
   for (const entity of companyEntities) {
-    // Extract the raw value from original text using indices
-    const rawValue = originalText.substring(entity.startIndex, entity.endIndex);
-    
-    // Check if this raw value still exists in redacted text
-    if (isCompanyValueStillPresent(rawValue, redactedText, originalText, entity)) {
+    if (isEntityValueStillPresent(entity, redactedText, originalText)) {
       return true; // Found unredacted company name
     }
   }
   
   // All detected companies were properly redacted
   return false;
+}
+
+/**
+ * Hard privacy gate: checks all detected entity types for unredacted values
+ */
+export function hasAnyUnredactedEntities(
+  originalText: string,
+  redactedText: string,
+  detectedEntities: DetectedEntity[]
+): { ok: boolean; offendingTypes: string[] } {
+  const offendingTypes = new Set<string>();
+
+  for (const entity of detectedEntities) {
+    if (isEntityValueStillPresent(entity, redactedText, originalText)) {
+      offendingTypes.add(entity.type);
+    }
+  }
+
+  return { ok: offendingTypes.size === 0, offendingTypes: Array.from(offendingTypes) };
 }
 
 /**
@@ -110,16 +119,14 @@ export function collectUnredactedIssues(
 ): Array<{ type: string; rawValue: string; reason: string }> {
   const issues: Array<{ type: string; rawValue: string; reason: string }> = [];
   
-  const companyEntities = detectedEntities.filter(e => e.type === 'COMPANY');
-  
-  for (const entity of companyEntities) {
+  for (const entity of detectedEntities) {
     const rawValue = originalText.substring(entity.startIndex, entity.endIndex);
     
-    if (isCompanyValueStillPresent(rawValue, redactedText, originalText, entity)) {
+    if (isEntityValueStillPresent(entity, redactedText, originalText)) {
       issues.push({
         type: entity.type,
         rawValue: rawValue,
-        reason: 'Detected company name still present in redacted text',
+        reason: 'Detected entity value still present in redacted text',
       });
     }
   }

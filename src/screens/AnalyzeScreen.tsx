@@ -6,6 +6,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
 import { analyzeContract } from '../utils/llmAdapter';
+import { hasAnyUnredactedEntities } from '../utils/privacyValidation';
 import { getFinalContractType } from '../domain/contractType/getFinalContractType';
 import { schemaForContractType } from '../domain/summary/summarySchemas';
 import { ContractTypeId } from '../domain/contractType/contractTypes';
@@ -14,7 +15,15 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Analyze'>;
 
 export default function AnalyzeScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { redactedText, setAnalysisResult, setLastApiPayload, setAuditInfo, selectedContractCategory } = useAppContext();
+  const {
+    redactedText,
+    originalText,
+    detectedEntities,
+    setAnalysisResult,
+    setLastApiPayload,
+    setAuditInfo,
+    selectedContractCategory,
+  } = useAppContext();
   const [status, setStatus] = useState<string>('Initializing analysis...');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const inFlightRef = useRef(false);
@@ -40,6 +49,19 @@ export default function AnalyzeScreen() {
         setStatus('Redacting sensitive information...');
         // Redaction already done, but we confirm here
         
+        // PRIVACY GUARDRAIL: Never send text if redaction is not 100% safe
+        const redactionCheck = hasAnyUnredactedEntities(originalText, redactedText, detectedEntities);
+        if (!redactionCheck.ok) {
+          setLastApiPayload('');
+          setAuditInfo(null);
+          setStatus('Η ανάλυση μπλοκαρίστηκε για λόγους απορρήτου.');
+          Alert.alert(
+            'Προστασία απορρήτου',
+            'Εντοπίστηκαν στοιχεία που δεν έχουν ανωνυμοποιηθεί πλήρως. Παρακαλούμε ελέγξτε το κείμενο πριν συνεχίσετε.'
+          );
+          return;
+        }
+
         setStatus('Sending redacted text to analysis API...');
         
         // PRIVACY: Payload will be set by analyzeContract callback
@@ -126,7 +148,16 @@ export default function AnalyzeScreen() {
     return () => {
       isMounted = false;
     };
-  }, [redactedText, navigation, selectedContractCategory, setAnalysisResult, setLastApiPayload, setAuditInfo]);
+  }, [
+    redactedText,
+    originalText,
+    detectedEntities,
+    navigation,
+    selectedContractCategory,
+    setAnalysisResult,
+    setLastApiPayload,
+    setAuditInfo,
+  ]);
 
   return (
     <View style={styles.container}>
