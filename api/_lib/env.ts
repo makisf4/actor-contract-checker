@@ -23,7 +23,8 @@ function isAllowedProviderUrl(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl);
     const host = parsed.hostname.toLowerCase();
-    return host === 'openai.com' || host.endsWith('.openai.com');
+    const path = parsed.pathname;
+    return host === 'api.openai.com' && path.startsWith('/v1/chat/completions');
   } catch {
     return false;
   }
@@ -59,9 +60,9 @@ export function getEnvConfig(): EnvResult {
     return {
       ok: false,
       error: {
-        status: 400,
-        code: 'invalid_openai_url',
-        message: 'OPENAI_API_URL must point to an allowed provider domain.',
+        status: 500,
+        code: 'invalid_provider_url',
+        message: 'OPENAI_API_URL is not allowed.',
       },
     };
   }
