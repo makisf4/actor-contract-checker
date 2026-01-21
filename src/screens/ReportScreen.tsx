@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
 import { Text, Card, Button, Chip } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
 import { CONTRACT_PROFILES } from '../domain/profiles/contractProfiles';
-import { exportReportText } from '../domain/report/exportReportText';
 import { getRiskTitle } from '../domain/risks/riskMetadata';
 import { postProcessRisks } from '../domain/risks/riskPostProcess';
 import { ContractTypeId, coerceContractTypeId, getContractTypeLabel } from '../domain/contractType/contractTypes';
 import { toGreekAllCaps } from '../utils/greekText';
+import { saveReportPdf } from '../utils/reportPdf';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Report'>;
 
@@ -77,6 +76,7 @@ export default function ReportScreen() {
   const { analysisResult, clearAll, auditInfo, selectedContractCategory, redactedText, isLastReport } = useAppContext();
   
   const [auditExpanded, setAuditExpanded] = useState(false);
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
   
   const contractTypeId = coerceContractTypeId(
     analysisResult?.contractTypeId || selectedContractCategory
@@ -192,37 +192,46 @@ export default function ReportScreen() {
     navigation.navigate('Home');
   };
 
-  const onCopyReport = async () => {
+  const onSaveReport = async () => {
     if (!analysisResult) {
-      Alert.alert('Δεν υπάρχει αναφορά', 'Δεν υπάρχει διαθέσιμη ανάλυση για αντιγραφή.');
+      Alert.alert('Δεν υπάρχει αναφορά', 'Δεν υπάρχει διαθέσιμη ανάλυση για αποθήκευση.');
       return;
     }
 
-    const text = exportReportText({
-      contractTypeLabel,
-      summary: summaryRecord,
-      summaryFieldOrder: summaryFields.map(field => ({ id: field.id, label: field.label })),
-      riskFlags: processedRiskFlags.map((flag: any) => ({
-        title: flag.title || getRiskTitle(flag.id),
-        severity: flag.severity,
-        why: flag.why,
-        clauseRef: flag.clauseRef,
-      })),
-      missingClauses: missingClausesFromSummary.map(missing => ({
-        title: missing.title,
-        why: missing.why,
-        ask: missing.ask,
-      })),
-      questions: analysisResult.questions || [],
-      negotiation: (analysisResult.negotiation || []).map(item => ({
-        title: item.title,
-        why: item.why,
-        proposed: item.proposed,
-      })),
-    });
+    if (isSavingPdf) {
+      return;
+    }
 
-    await Clipboard.setStringAsync(text);
-    Alert.alert('Έτοιμο', 'Η αναφορά αντιγράφηκε στο πρόχειρο.');
+    setIsSavingPdf(true);
+    try {
+      await saveReportPdf({
+        contractTypeLabel,
+        summary: summaryRecord,
+        summaryFieldOrder: summaryFields.map(field => ({ id: field.id, label: field.label })),
+        riskFlags: processedRiskFlags.map((flag: any) => ({
+          title: flag.title || getRiskTitle(flag.id),
+          severity: flag.severity,
+          why: flag.why,
+          clauseRef: flag.clauseRef,
+        })),
+        missingClauses: missingClausesFromSummary.map(missing => ({
+          title: missing.title,
+          why: missing.why,
+          ask: missing.ask,
+        })),
+        questions: analysisResult.questions || [],
+        negotiation: (analysisResult.negotiation || []).map(item => ({
+          title: item.title,
+          why: item.why,
+          proposed: item.proposed,
+        })),
+      });
+      Alert.alert('Έτοιμο', 'Η αναφορά αποθηκεύτηκε.');
+    } catch (error) {
+      Alert.alert('Σφάλμα', 'Δεν ήταν δυνατή η αποθήκευση της αναφοράς.');
+    } finally {
+      setIsSavingPdf(false);
+    }
   };
 
   const renderSummary = () => {
@@ -379,20 +388,14 @@ export default function ReportScreen() {
 
       {analysisResult ? (
         <View style={styles.copyActionContainer}>
-          <Pressable
-            onPress={onCopyReport}
-            style={{
-              paddingVertical: 12,
-              borderRadius: 999,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 1,
-            }}
+          <Button
+            mode="contained"
+            onPress={onSaveReport}
+            loading={isSavingPdf}
+            disabled={isSavingPdf}
           >
-            <Text style={{ fontSize: 16, fontWeight: '600' }}>
-              Αντιγραφή Αναφοράς
-            </Text>
-          </Pressable>
+            Αποθήκευση Αναφοράς (PDF)
+          </Button>
         </View>
       ) : null}
 
