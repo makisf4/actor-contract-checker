@@ -7,7 +7,7 @@ import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
 import { getContractTypeLabel } from '../domain/contractType/contractTypes';
 import { detectMultiContractLikelihood } from '../domain/analysis/multiContractHeuristics';
-import { hasAnyUnredactedEntities, detectSuspiciousUnredactedPatterns, hasUnredactedResiduals } from '../utils/privacyValidation';
+import { hasAnyUnredactedEntities, detectSuspiciousUnredactedPatterns, hasUnredactedResiduals, maskForLog } from '../utils/privacyValidation';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'RedactionPreview'>;
 
@@ -64,6 +64,16 @@ export default function RedactionPreviewScreen() {
     const suspiciousGate = detectSuspiciousUnredactedPatterns(redactedText);
     const residualsGate = hasUnredactedResiduals(originalText, redactedText);
     const shouldBlock = !entitiesGate.ok || !suspiciousGate.ok || !residualsGate.ok;
+
+    console.log('[PRIVACY_GATE][PREVIEW] originalLen=', originalText.length);
+    console.log('[PRIVACY_GATE][PREVIEW] finalLen=', redactedText.length);
+    console.log('[PRIVACY_GATE][PREVIEW] detectedEntitiesCount=', detectedEntities.length);
+    console.log('[PRIVACY_GATE][PREVIEW] entitiesGateOk=', entitiesGate.ok, 'offendingTypes=', entitiesGate.offendingTypes);
+    console.log('[PRIVACY_GATE][PREVIEW] suspiciousGateOk=', suspiciousGate.ok, 'reasons=', suspiciousGate.reasons);
+    console.log('[PRIVACY_GATE][PREVIEW] residualsGateOk=', residualsGate.ok, 'reasons=', residualsGate.reasons);
+    console.log('[PRIVACY_GATE][PREVIEW] shouldBlock=', shouldBlock);
+    console.log('[PRIVACY_GATE][PREVIEW] finalHeadMasked=', maskForLog(redactedText));
+
     if (shouldBlock) {
       const reasonLabels = new Set<string>();
       const typeToReason = (type: string) => {

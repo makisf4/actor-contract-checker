@@ -6,7 +6,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
 import { analyzeContract } from '../utils/llmAdapter';
-import { hasAnyUnredactedEntities, detectSuspiciousUnredactedPatterns, hasUnredactedResiduals } from '../utils/privacyValidation';
+import { hasAnyUnredactedEntities, detectSuspiciousUnredactedPatterns, hasUnredactedResiduals, maskForLog } from '../utils/privacyValidation';
 import { getFinalContractType } from '../domain/contractType/getFinalContractType';
 import { schemaForContractType } from '../domain/summary/summarySchemas';
 import { ContractTypeId } from '../domain/contractType/contractTypes';
@@ -54,7 +54,18 @@ export default function AnalyzeScreen() {
         const suspiciousGate = detectSuspiciousUnredactedPatterns(redactedText);
         const residualsGate = hasUnredactedResiduals(originalText, redactedText);
         const shouldBlock = !entitiesGate.ok || !suspiciousGate.ok || !residualsGate.ok;
+
+        console.log('[PRIVACY_GATE][ANALYZE] originalLen=', originalText.length);
+        console.log('[PRIVACY_GATE][ANALYZE] finalLen=', redactedText.length);
+        console.log('[PRIVACY_GATE][ANALYZE] detectedEntitiesCount=', detectedEntities.length);
+        console.log('[PRIVACY_GATE][ANALYZE] entitiesGateOk=', entitiesGate.ok, 'offendingTypes=', entitiesGate.offendingTypes);
+        console.log('[PRIVACY_GATE][ANALYZE] suspiciousGateOk=', suspiciousGate.ok, 'reasons=', suspiciousGate.reasons);
+        console.log('[PRIVACY_GATE][ANALYZE] residualsGateOk=', residualsGate.ok, 'reasons=', residualsGate.reasons);
+        console.log('[PRIVACY_GATE][ANALYZE] shouldBlock=', shouldBlock);
+        console.log('[PRIVACY_GATE][ANALYZE] finalHeadMasked=', maskForLog(redactedText));
+
         if (shouldBlock) {
+          console.log('[PRIVACY_GATE][ANALYZE] BLOCKED returning early');
           const reasonLabels = new Set<string>();
           const typeToReason = (type: string) => {
             switch (type) {
