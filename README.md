@@ -225,6 +225,27 @@ Notes:
 - Αν το `EXPO_PUBLIC_LLM_API_URL` λείπει/είναι κενό, το app χρησιμοποιεί local mock και δεν κάνει network call.
 - Direct provider endpoints (π.χ. `openai.com`) μπλοκάρονται από το client.
 
+### Proxy Setup (Local/Dev)
+
+Το app πρέπει να καλεί **μόνο** το δικό σου proxy endpoint.
+
+Client (app) env:
+```
+EXPO_PUBLIC_LLM_API_URL=https://YOUR_DOMAIN/api/analyze
+```
+
+Server env (deployment platform):
+```
+LLM_PROVIDER=openai
+OPENAI_API_KEY=YOUR_PROVIDER_KEY
+OPENAI_API_URL=<PROVIDER_API_URL>
+```
+
+Σημειώσεις:
+- ΜΗΝ ορίζεις `EXPO_PUBLIC_LLM_API_KEY` στο app.
+- Τα provider keys μένουν αποκλειστικά στο server.
+- Για local dev, χρησιμοποίησε Vercel CLI (`vercel dev`) και το local function URL που εμφανίζεται από το CLI.
+
 ### Running
 
 - **iOS:** `npm run ios`
