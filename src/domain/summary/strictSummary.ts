@@ -66,6 +66,19 @@ const EVIDENCE_RULES: Record<string, RegExp[]> = {
     /ΕΛΛΗΝΙΚ(Η|ΗΣ)\s+ΕΠΙΚΡΑΤΕΙΑ/i,
     /\bΕΛΛΑΔ(Α|ΟΣ)\b/i,
     /ΕΝΤΟΣ\s+ΕΛΛΑΔ/i,
+    /ΣΤΗΝ\s+ΕΛΛΑΔΑ\s+ΚΑΙ\s+ΤΟ\s+ΕΞΩΤΕΡΙΚΟ/i,
+    /ΕΛΛΑΔ.{0,40}ΕΞΩΤΕΡΙΚ|ΕΞΩΤΕΡΙΚ.{0,40}ΕΛΛΑΔ/i,
+  ],
+  shoot_period: [
+    /ΤΡΙΩΝ\s*\(\s*3\s*\)\s*ΜΗΝ/i,
+    /\b3\b.*\bΜΗΝ/i,
+    /ΔΙΑΡΚΕΙΑ\s+ΣΥΜΜΕΤΟΧΗΣ/i,
+    /ΓΥΡΙΣΜΑΤ/i,
+  ],
+  exploitation_media: [
+    /ΚΙΝΗΜΑΤΟΓΡΑΦ(ΙΚΕΣ|ΙΚΗ)\s+ΑΙΘΟΥΣ/i,
+    /ΦΕΣΤΙΒΑΛ/i,
+    /ΚΙΝΗΜΑΤΟΓΡΑΦΙΚ(Η|ΕΣ)\s+ΕΚΜΕΤΑΛΛΕΥΣ/i,
   ],
   media_tv: [
     /ΤΗΛΕΟΡΑΣ/i,
@@ -339,6 +352,12 @@ function getFallbackSummaryValue(
       return 'Υπάρχει αναφορά σε διάρκεια';
     }
     case 'territory': {
+      if (/ΕΛΛΑΔΑ\s+ΚΑΙ\s+ΤΟ\s+ΕΞΩΤΕΡΙΚΟ/.test(evidenceTextUpper)) {
+        return 'Ελλάδα και εξωτερικό';
+      }
+      if (/ΕΛΛΑΔ.{0,40}ΕΞΩΤΕΡΙΚ|ΕΞΩΤΕΡΙΚ.{0,40}ΕΛΛΑΔ/.test(evidenceTextUpper)) {
+        return 'Ελλάδα και εξωτερικό';
+      }
       if (/ΕΛΛΗΝΙΚ(Η|ΗΣ)\s+ΕΠΙΚΡΑΤΕΙΑ/.test(evidenceTextUpper)) {
         return 'Ελληνική επικράτεια';
       }
@@ -346,6 +365,27 @@ function getFallbackSummaryValue(
         return 'Ελλάδα';
       }
       return 'Υπάρχει αναφορά σε περιοχή χρήσης';
+    }
+    case 'shoot_period': {
+      if (/\b3\b.*\bμ[ήη]ν/i.test(processedText) || /ΤΡΙΩΝ\s*\(\s*3\s*\)\s*ΜΗΝ/i.test(evidenceTextUpper)) {
+        return '3 μήνες';
+      }
+      return 'Υπάρχει αναφορά σε διάρκεια γυρισμάτων';
+    }
+    case 'exploitation_media': {
+      const hasCinema = /ΚΙΝΗΜΑΤΟΓΡΑΦ(ΙΚΕΣ|ΙΚΗ)\s+ΑΙΘΟΥΣ/i.test(evidenceTextUpper)
+        || /ΚΙΝΗΜΑΤΟΓΡΑΦΙΚ(Η|ΕΣ)\s+ΕΚΜΕΤΑΛΛΕΥΣ/i.test(evidenceTextUpper);
+      const hasFestival = /ΦΕΣΤΙΒΑΛ/i.test(evidenceTextUpper);
+      if (hasCinema && hasFestival) {
+        return 'Κινηματογραφικές αίθουσες / Φεστιβάλ';
+      }
+      if (hasCinema) {
+        return 'Κινηματογραφικές αίθουσες';
+      }
+      if (hasFestival) {
+        return 'Φεστιβάλ';
+      }
+      return 'Υπάρχει αναφορά σε μέσα εκμετάλλευσης';
     }
     case 'media_tv': {
       if (/ΤΗΛΕΟΡΑΣ|ΤΗΛΕΟΠΤΙΚ|TV\b/.test(evidenceTextUpper)) {
