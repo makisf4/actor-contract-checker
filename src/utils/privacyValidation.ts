@@ -121,7 +121,7 @@ export function detectSuspiciousUnredactedPatterns(
   }
 
   const reasons = new Set<string>();
-  const placeholderPattern = /X{6,}/;
+  const placeholderPattern = /X{6,}/g;
   const lines = redactedText.split(/\r?\n/);
   const preambleIndex = redactedText.search(/^\s*ΑΡΘΡΟ\s+1\b/im);
 
@@ -169,26 +169,27 @@ export function detectSuspiciousUnredactedPatterns(
       searchFrom = lineIndex + line.length;
     }
     const isPreamble = preambleIndex !== -1 && lineIndex !== -1 && lineIndex < preambleIndex;
-    if (placeholderPattern.test(line)) {
+    const lineForScan = line.replace(placeholderPattern, '');
+    if (!lineForScan.trim()) {
       continue;
     }
-    if (companySuffixPattern.test(line)) {
+    if (companySuffixPattern.test(lineForScan)) {
       reasons.add('ΠΙΘΑΝΗ ΕΤΑΙΡΕΙΑ');
     }
-    if (addressCuePattern.test(line)) {
+    if (addressCuePattern.test(lineForScan)) {
       reasons.add('ΠΙΘΑΝΗ ΔΙΕΥΘΥΝΣΗ');
     }
 
     titleCaseNamePattern.lastIndex = 0;
     let nameMatch;
-    while ((nameMatch = titleCaseNamePattern.exec(line)) !== null) {
+    while ((nameMatch = titleCaseNamePattern.exec(lineForScan)) !== null) {
       const normalized = normalizeForAllowlist(nameMatch[0]);
       if (allowedTitlePhrases.has(normalized)) {
         continue;
       }
       const windowStart = Math.max(0, nameMatch.index - 80);
-      const windowEnd = Math.min(line.length, nameMatch.index + nameMatch[0].length + 80);
-      const window = line.slice(windowStart, windowEnd);
+      const windowEnd = Math.min(lineForScan.length, nameMatch.index + nameMatch[0].length + 80);
+      const window = lineForScan.slice(windowStart, windowEnd);
       const hasCue = titleCaseCuePattern.test(window);
       if (isPreamble || hasCue) {
         reasons.add('ΠΙΘΑΝΟ ΟΝΟΜΑ');
@@ -196,10 +197,10 @@ export function detectSuspiciousUnredactedPatterns(
       }
     }
 
-    if (!reasons.has('ΠΙΘΑΝΗ ΕΤΑΙΡΕΙΑ') && companyKeywordPattern.test(line)) {
+    if (!reasons.has('ΠΙΘΑΝΗ ΕΤΑΙΡΕΙΑ') && companyKeywordPattern.test(lineForScan)) {
       titleCaseCompanyPattern.lastIndex = 0;
       let companyMatch;
-      while ((companyMatch = titleCaseCompanyPattern.exec(line)) !== null) {
+      while ((companyMatch = titleCaseCompanyPattern.exec(lineForScan)) !== null) {
         const normalized = normalizeForAllowlist(companyMatch[0]);
         if (allowedTitlePhrases.has(normalized)) {
           continue;
@@ -223,12 +224,13 @@ export function detectSuspiciousUnredactedPatterns(
   ]);
 
   for (const line of lines) {
-    if (placeholderPattern.test(line)) {
+    const lineForScan = line.replace(placeholderPattern, '');
+    if (!lineForScan.trim()) {
       continue;
     }
     uppercaseSequencePattern.lastIndex = 0;
     let match;
-    while ((match = uppercaseSequencePattern.exec(line)) !== null) {
+    while ((match = uppercaseSequencePattern.exec(lineForScan)) !== null) {
       const words = match[0].split(/\s+/);
       const normalized = normalizeForAllowlist(match[0]);
       if (allowedTitlePhrases.has(normalized)) {
