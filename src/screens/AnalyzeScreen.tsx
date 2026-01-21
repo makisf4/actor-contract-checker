@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, ScrollView, Alert, InteractionManager } from 'react-native';
 import { Text, ActivityIndicator, Card } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,9 +16,26 @@ export default function AnalyzeScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { redactedText, setAnalysisResult, setLastApiPayload, setAuditInfo, selectedContractCategory } = useAppContext();
   const [status, setStatus] = useState<string>('Initializing analysis...');
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
+    let isMounted = true;
     const performAnalysis = async () => {
+      if (inFlightRef.current) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log('[ANALYZE] Skipped duplicate run');
+        }
+        return;
+      }
+      inFlightRef.current = true;
+      setIsAnalyzing(true);
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.log('[ANALYZE] start', {
+          textLength: redactedText.length,
+          hasSelection: !!selectedContractCategory,
+        });
+      }
       try {
         setStatus('Redacting sensitive information...');
         // Redaction already done, but we confirm here
@@ -64,22 +81,52 @@ export default function AnalyzeScreen() {
         );
         
         setStatus('Processing results...');
+        if (!isMounted) {
+          return;
+        }
         setAnalysisResult(result);
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log('[ANALYZE] success (result ready)', {
+            hasResult: !!result,
+          });
+        }
         
         setStatus('Complete!');
-        setTimeout(() => {
-          navigation.navigate('Report');
-        }, 500);
+        InteractionManager.runAfterInteractions(() => {
+          if (!isMounted) {
+            return;
+          }
+          if (typeof __DEV__ !== 'undefined' && __DEV__) {
+            console.log('[ANALYZE] navigate to Report');
+          }
+          navigation.replace('Report');
+        });
       } catch (error) {
+        if (!isMounted) {
+          return;
+        }
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
           console.warn('[Analysis] Validation or API error', error);
         }
-        setStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setStatus('Δεν ήταν δυνατή η ολοκλήρωση της ανάλυσης.');
+        Alert.alert('Σφάλμα ανάλυσης', 'Η ανάλυση δεν ολοκληρώθηκε. Παρακαλώ δοκιμάστε ξανά.');
+      } finally {
+        if (!isMounted) {
+          return;
+        }
+        setIsAnalyzing(false);
+        inFlightRef.current = false;
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log('[ANALYZE] finally (loading false)', { isAnalyzing: false });
+        }
       }
     };
 
     performAnalysis();
-  }, [redactedText, navigation, setAnalysisResult, setLastApiPayload, setAuditInfo]);
+    return () => {
+      isMounted = false;
+    };
+  }, [redactedText, navigation, selectedContractCategory, setAnalysisResult, setLastApiPayload, setAuditInfo]);
 
   return (
     <View style={styles.container}>
