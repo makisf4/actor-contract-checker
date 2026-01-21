@@ -19,6 +19,12 @@ export interface AppContextType {
   setDetectedEntities: (entities: DetectedEntity[]) => void;
   analysisResult: AnalysisResponseV1 | null;
   setAnalysisResult: (result: AnalysisResponseV1 | null) => void;
+  isLastReport: boolean;
+  clearLastReport: () => Promise<void>;
+  credits: number;
+  refreshCredits: () => Promise<number>;
+  addCredits: (n: number) => Promise<number>;
+  consumeCredit: () => Promise<boolean>;
   devMode: boolean;
   setDevMode: (enabled: boolean) => void;
   lastApiPayload: string;

@@ -74,7 +74,7 @@ const SeverityBadge = ({ severity }: { severity: string }) => {
 
 export default function ReportScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { analysisResult, clearAll, auditInfo, selectedContractCategory, redactedText } = useAppContext();
+  const { analysisResult, clearAll, auditInfo, selectedContractCategory, redactedText, isLastReport } = useAppContext();
   
   const [auditExpanded, setAuditExpanded] = useState(false);
   
@@ -256,6 +256,11 @@ export default function ReportScreen() {
 
   return (
     <ScrollView style={styles.container}>
+      {isLastReport && (
+        <Text variant="bodySmall" style={styles.lastReportNote}>
+          Τελευταία Ανάλυση (προσωρινή)
+        </Text>
+      )}
       {renderSummary()}
 
       <Card style={styles.card}>
@@ -476,6 +481,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 4,
     marginBottom: 12,
+  },
+  lastReportNote: {
+    color: '#666',
+    fontStyle: 'italic',
+    marginBottom: 10,
   },
   emptyStateText: {
     color: '#444',

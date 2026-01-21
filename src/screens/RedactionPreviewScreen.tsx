@@ -1,38 +1,95 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { Text, Card, Button, Chip } from 'react-native-paper';
+import { Text, Card, Button, Chip, Portal, Dialog } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
 import { getContractTypeLabel } from '../domain/contractType/contractTypes';
+import { detectMultiContractLikelihood } from '../domain/analysis/multiContractHeuristics';
 import { shouldWarnUnredactedCompany } from '../utils/privacyValidation';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'RedactionPreview'>;
 
 export default function RedactionPreviewScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { redactedText, detectedEntities, originalText, selectedContractCategory } = useAppContext();
+  const {
+    redactedText,
+    detectedEntities,
+    originalText,
+    selectedContractCategory,
+    credits,
+    consumeCredit,
+    clearLastReport,
+  } = useAppContext();
+
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showMultiWarning, setShowMultiWarning] = useState(false);
+  const [multiReasons, setMultiReasons] = useState<string[]>([]);
+
+  const MAX_CHARACTERS = 25000;
+  const MULTI_CONTRACT_THRESHOLD = 0.7;
 
   const entityCounts = detectedEntities.reduce((acc, entity) => {
     acc[entity.type] = (acc[entity.type] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
+  const startConfirmationFlow = () => {
+    const multiCheck = detectMultiContractLikelihood(redactedText || originalText);
+    if (multiCheck.score >= MULTI_CONTRACT_THRESHOLD) {
+      setMultiReasons(multiCheck.reasons);
+      setShowMultiWarning(true);
+      return;
+    }
+    setShowConfirm(true);
+  };
+
   const handleAnalyze = () => {
-    // Use proper privacy validation based on entity comparison
+    if (originalText.length > MAX_CHARACTERS) {
+      Alert.alert(
+        'Όριο χαρακτήρων',
+        'Το κείμενο υπερβαίνει το όριο των 25.000 χαρακτήρων. Παρακαλώ ελέγξτε ένα συμβόλαιο τη φορά.'
+      );
+      return;
+    }
+
+    if (credits <= 0) {
+      setShowPaywall(true);
+      return;
+    }
+
     if (shouldWarnUnredactedCompany(originalText, redactedText, detectedEntities)) {
       Alert.alert(
         'Προσοχή',
         'Εντοπίστηκε πιθανή επωνυμία εταιρείας που δεν ανωνυμοποιήθηκε. Ελέγξτε το preview πριν συνεχίσετε.',
         [
           { text: 'Ακύρωση', style: 'cancel' },
-          { text: 'Συνέχεια', onPress: () => navigation.navigate('Analyze') },
+          { text: 'Συνέχεια', onPress: startConfirmationFlow },
         ]
       );
-    } else {
-      navigation.navigate('Analyze');
+      return;
     }
+
+    startConfirmationFlow();
+  };
+
+  const handleConfirm = async () => {
+    const ok = await consumeCredit();
+    if (!ok) {
+      setShowConfirm(false);
+      setShowPaywall(true);
+      return;
+    }
+    setShowConfirm(false);
+    await clearLastReport();
+    navigation.navigate('Analyze');
+  };
+
+  const handleWarningContinue = () => {
+    setShowMultiWarning(false);
+    setShowConfirm(true);
   };
 
   return (
@@ -149,6 +206,9 @@ export default function RedactionPreviewScreen() {
       </Card>
 
       <View style={styles.buttonContainer}>
+        <Text variant="bodySmall" style={styles.creditsText}>
+          Διαθέσιμα credits: {credits}
+        </Text>
         <Button
           mode="contained"
           onPress={handleAnalyze}
@@ -157,6 +217,52 @@ export default function RedactionPreviewScreen() {
           Ανάλυση Συμβολαίου
         </Button>
       </View>
+
+      <Portal>
+        <Dialog visible={showPaywall} onDismiss={() => setShowPaywall(false)}>
+          <Dialog.Title>Credits</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall">
+              Δεν υπάρχουν διαθέσιμα credits αυτή τη στιγμή.
+            </Text>
+            <Text variant="bodySmall" style={styles.modalHelper}>
+              Η αγορά credits δεν υποστηρίζεται σε αυτή την έκδοση.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowPaywall(false)}>Κλείσιμο</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        <Dialog visible={showMultiWarning} onDismiss={() => setShowMultiWarning(false)}>
+          <Dialog.Title>Πιθανή πολλαπλή σύμβαση</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall">
+              Φαίνεται ότι το κείμενο περιέχει περισσότερες από μία συμβάσεις. Η ανάλυση μπορεί να είναι λιγότερο σαφής.
+            </Text>
+            {multiReasons.length > 0 && (
+              <Text variant="bodySmall" style={styles.modalHelper}>
+                Ενδείξεις: {multiReasons.join(' • ')}
+              </Text>
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowMultiWarning(false)}>Επιστροφή</Button>
+            <Button onPress={handleWarningContinue}>Συνέχεια όπως είναι</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        <Dialog visible={showConfirm} onDismiss={() => setShowConfirm(false)}>
+          <Dialog.Title>Επιβεβαίωση</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall">Η ανάλυση θα καταναλώσει 1 credit.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowConfirm(false)}>Άκυρο</Button>
+            <Button onPress={handleConfirm}>Συνέχεια</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </ScrollView>
   );
 }
@@ -217,6 +323,14 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginBottom: 16,
+  },
+  creditsText: {
+    color: '#666',
+    marginBottom: 8,
+  },
+  modalHelper: {
+    color: '#666',
+    marginTop: 8,
   },
   button: {
     marginBottom: 8,

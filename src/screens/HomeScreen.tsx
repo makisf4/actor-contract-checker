@@ -26,7 +26,19 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
 export default function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { originalText, setOriginalText, setRedactedText, setDetectedEntities, setDevMode, devMode, clearAll, selectedContractCategory, setSelectedContractCategory } = useAppContext();
+  const {
+    originalText,
+    setOriginalText,
+    setRedactedText,
+    setDetectedEntities,
+    setDevMode,
+    devMode,
+    clearAll,
+    selectedContractCategory,
+    setSelectedContractCategory,
+    credits,
+    addCredits,
+  } = useAppContext();
   const [localText, setLocalText] = useState(originalText);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [faqExpanded, setFaqExpanded] = useState<Record<number, boolean>>({});
@@ -110,6 +122,10 @@ export default function HomeScreen() {
     setFaqExpanded(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
+  const handleAddCredits = (amount: number) => {
+    void addCredits(amount);
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.keyboardAvoid}
@@ -189,6 +205,9 @@ export default function HomeScreen() {
               </Chip>
             )}
           </View>
+          <Text variant="bodySmall" style={styles.creditsText}>
+            Διαθέσιμα credits: {credits}
+          </Text>
         </Card.Content>
       </Card>
 
@@ -311,13 +330,31 @@ export default function HomeScreen() {
               <Switch value={devMode} onValueChange={setDevMode} />
             </View>
             {devMode && (
-              <Button
-                mode="text"
-                onPress={() => navigation.navigate('DevMode')}
-                style={styles.devButton}
-              >
-                View DEV Mode Screen
-              </Button>
+              <>
+                <Button
+                  mode="text"
+                  onPress={() => navigation.navigate('DevMode')}
+                  style={styles.devButton}
+                >
+                  View DEV Mode Screen
+                </Button>
+                <View style={styles.mockCreditsContainer}>
+                  <Text variant="bodySmall" style={styles.mockCreditsLabel}>
+                    Mock credits (DEV)
+                  </Text>
+                  <View style={styles.mockCreditsRow}>
+                    <Button mode="outlined" onPress={() => handleAddCredits(1)} style={styles.mockCreditButton}>
+                      +1 credit (mock)
+                    </Button>
+                    <Button mode="outlined" onPress={() => handleAddCredits(3)} style={styles.mockCreditButton}>
+                      +3 credits (mock)
+                    </Button>
+                    <Button mode="outlined" onPress={() => handleAddCredits(5)} style={styles.mockCreditButton}>
+                      +5 credits (mock)
+                    </Button>
+                  </View>
+                </View>
+              </>
             )}
           </Card.Content>
         </Card>
@@ -383,6 +420,10 @@ const styles = StyleSheet.create({
   },
   categoryChip: {
     marginTop: 8,
+  },
+  creditsText: {
+    color: '#666',
+    marginTop: 4,
   },
   menuContent: {
     minHeight: 180,
@@ -527,5 +568,18 @@ const styles = StyleSheet.create({
   },
   devButton: {
     marginTop: 8,
+  },
+  mockCreditsContainer: {
+    marginTop: 12,
+  },
+  mockCreditsLabel: {
+    color: '#666',
+    marginBottom: 6,
+  },
+  mockCreditsRow: {
+    gap: 8,
+  },
+  mockCreditButton: {
+    alignSelf: 'flex-start',
   },
 });
