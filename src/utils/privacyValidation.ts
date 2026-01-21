@@ -16,17 +16,6 @@ function normalizeText(text: string): string {
     .replace(/^[.,;:!?]+|[.,;:!?]+$/g, '');
 }
 
-export function maskForLog(input: string, maxLen = 60): string {
-  if (!input) {
-    return '';
-  }
-  const snippet = input.slice(0, maxLen);
-  const placeholderToken = '~~~~~~';
-  let masked = snippet.replace(/X{6,}/g, placeholderToken);
-  masked = masked.replace(/\p{L}/gu, '*').replace(/\p{N}/gu, '#');
-  return masked.replace(new RegExp(placeholderToken, 'g'), 'XXXXXX');
-}
-
 /**
  * Strips all placeholders from text to check for unredacted content
  */
