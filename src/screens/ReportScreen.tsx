@@ -5,8 +5,10 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
+import type { Severity } from '../domain/analysis/analysisSchema';
 import { CONTRACT_PROFILES } from '../domain/profiles/contractProfiles';
 import { getRiskTitle } from '../domain/risks/riskMetadata';
+import type { RiskId } from '../domain/risks/riskMetadata';
 import { postProcessRisks } from '../domain/risks/riskPostProcess';
 import { ContractTypeId, coerceContractTypeId, getContractTypeLabel } from '../domain/contractType/contractTypes';
 import { toGreekAllCaps } from '../utils/greekText';
@@ -71,6 +73,56 @@ const SeverityBadge = ({ severity }: { severity: string }) => {
   );
 };
 
+type RiskFlag = {
+  id: RiskId;
+  severity: Severity;
+  why?: string;
+  clauseRef?: string;
+};
+
+function addFallbackCoreRisks(risks: RiskFlag[], processedText: string): RiskFlag[] {
+  const textUpper = processedText.toUpperCase();
+  if (!textUpper) {
+    return risks;
+  }
+
+  const hasExclusivityEvidence = /ΑΠΟΚΛΕΙΣΤ/.test(textUpper)
+    || /ΑΝΤΑΓΩΝΙΣΤ/.test(textUpper)
+    || /ΜΗ\s+ΣΥΜΜΕΤΑΣΧ/.test(textUpper);
+
+  const hasTerminationEvidence = /ΛΥΣΗ\s+ΤΗΣ\s+ΣΥΜΒΑΣΗΣ/.test(textUpper)
+    || /ΚΑΤΑΓΓΕΛ/.test(textUpper)
+    || /ΑΝΩΤΕΡΑ\s+ΒΙΑ/.test(textUpper)
+    || /ΧΩΡΙΣ\s+ΠΕΡΑΙΤΕΡΩ\s+ΑΞΙΩΣ/.test(textUpper);
+
+  const existingIds = new Set(risks.map(risk => risk.id));
+  const next = [...risks];
+
+  if (hasExclusivityEvidence && !existingIds.has('exclusivity')) {
+    next.push({
+      id: 'exclusivity',
+      severity: 'moderate',
+      why: 'Υπάρχει ρητή αναφορά σε περιορισμό συμμετοχής σε ανταγωνιστική κατηγορία.',
+    });
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log('[Risk Fallback] Added', { id: 'exclusivity' });
+    }
+  }
+
+  if (hasTerminationEvidence && !existingIds.has('termination')) {
+    next.push({
+      id: 'termination',
+      severity: 'moderate',
+      why: 'Υπάρχει αναφορά σε λύση/ανωτέρα βία χωρίς περαιτέρω αξιώσεις.',
+    });
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log('[Risk Fallback] Added', { id: 'termination' });
+    }
+  }
+
+  return next;
+}
+
 export default function ReportScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { analysisResult, clearAll, auditInfo, selectedContractCategory, redactedText, isLastReport } = useAppContext();
@@ -88,14 +140,16 @@ export default function ReportScreen() {
   const summaryRecord = (analysisResult?.summary || {}) as Record<string, string | null>;
   const summaryFields = profile.summaryFields.filter(field => field.showFor.includes(contractTypeId));
 
-  const filteredRiskFlags = (analysisResult?.riskFlags || []).filter((flag: any) =>
+  const filteredRiskFlags = (analysisResult?.riskFlags || []).filter((flag: RiskFlag) =>
     allowedRiskIds.has(flag.id)
   );
+
+  const riskFlagsWithFallback = addFallbackCoreRisks(filteredRiskFlags, redactedText || '');
 
   const processedRiskFlags = postProcessRisks({
     contractTypeId,
     processedText: redactedText,
-    risks: filteredRiskFlags.map((flag: any) => ({
+    risks: riskFlagsWithFallback.map((flag: RiskFlag) => ({
       id: flag.id,
       severity: flag.severity,
       title: getRiskTitle(flag.id),
