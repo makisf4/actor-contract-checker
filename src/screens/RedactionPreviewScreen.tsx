@@ -68,19 +68,18 @@ export default function RedactionPreviewScreen() {
       const typeToReason = (type: string) => {
         switch (type) {
           case 'PERSON':
+            return 'ΠΙΘΑΝΟ ΟΝΟΜΑ';
           case 'COMPANY':
-            return 'ΟΝΟΜΑ/ΕΤΑΙΡΕΙΑ';
+            return 'ΠΙΘΑΝΗ ΕΤΑΙΡΕΙΑ';
           case 'EMAIL':
-            return 'EMAIL';
           case 'PHONE':
-            return 'ΤΗΛΕΦΩΝΟ';
           case 'IBAN':
-            return 'IBAN';
+            return 'ΠΙΘΑΝΟ EMAIL/IBAN/ΤΗΛΕΦΩΝΟ';
           case 'TAX_ID':
-            return 'ΑΦΜ';
+            return 'ΠΙΘΑΝΟ ΑΦΜ';
           case 'ADDRESS':
           case 'ADDRESS_NUMBER':
-            return 'ΔΙΕΥΘΥΝΣΗ';
+            return 'ΠΙΘΑΝΗ ΔΙΕΥΘΥΝΣΗ';
           default:
             return 'ΛΟΙΠΑ ΣΤΟΙΧΕΙΑ';
         }
@@ -91,12 +90,12 @@ export default function RedactionPreviewScreen() {
 
       const reasonList = Array.from(reasonLabels).slice(0, 2);
       const reasonText = reasonList.length
-        ? `\n\nΠιθανά μη ανωνυμοποιημένα στοιχεία:\n• ${reasonList.join('\n• ')}`
+        ? `\n\nΤΥΠΟΙ: ${reasonList.join(', ')}`
         : '';
 
       Alert.alert(
-        'Προσοχή',
-        `Εντοπίστηκαν στοιχεία που δεν έχουν ανωνυμοποιηθεί πλήρως. Παρακαλούμε ελέγξτε το κείμενο πριν συνεχίσετε.${reasonText}`,
+        'ΠΡΟΣΟΧΗ',
+        `ΕΝΤΟΠΙΣΤΗΚΑΝ ΠΙΘΑΝΑ ΣΤΟΙΧΕΙΑ ΠΟΥ ΔΕΝ ΕΧΟΥΝ ΑΝΩΝΥΜΟΠΟΙΗΘΕΙ ΠΛΗΡΩΣ. ΕΛΕΓΞΤΕ ΤΟ ΚΕΙΜΕΝΟ ΚΑΙ ΑΝΤΙΚΑΤΑΣΤΗΣΤΕ ΜΕ XXXXXX ΠΡΙΝ ΣΥΝΕΧΙΣΕΤΕ.${reasonText}`,
         [{ text: 'Επιστροφή στην Προεπισκόπηση', style: 'cancel' }]
       );
       return;
