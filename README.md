@@ -217,10 +217,13 @@ npm start
 Create a `.env` file (optional, for production):
 
 ```
-EXPO_PUBLIC_LLM_API_KEY=REPLACE_ME
-⚠️ Μην βάζεις ποτέ πραγματικό API key σε public repo. Χρησιμοποίησε τοπικό .env αρχείο.
-EXPO_PUBLIC_LLM_API_URL=https://api.openai.com/v1/chat/completions
+EXPO_PUBLIC_LLM_API_URL=https://YOUR_DOMAIN/api/analyze
 ```
+
+Notes:
+- Το endpoint πρέπει να είναι **δικός σου proxy server**. Τα provider keys κρατιούνται αποκλειστικά server-side.
+- Αν το `EXPO_PUBLIC_LLM_API_URL` λείπει/είναι κενό, το app χρησιμοποιεί local mock και δεν κάνει network call.
+- Direct provider endpoints (π.χ. `openai.com`) μπλοκάρονται από το client.
 
 ### Running
 

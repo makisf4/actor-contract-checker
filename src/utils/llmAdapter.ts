@@ -3,8 +3,8 @@ import { CONTRACT_PROFILES } from '../domain/profiles/contractProfiles';
 import { AnalysisResponseV1, validateAnalysisResponse } from '../domain/analysis/analysisSchema';
 import { buildStrictSummary } from '../domain/summary/strictSummary';
 
-const API_KEY = process.env.EXPO_PUBLIC_LLM_API_KEY || '';
-const API_URL = process.env.EXPO_PUBLIC_LLM_API_URL || 'https://api.openai.com/v1/chat/completions';
+const API_URL = (process.env.EXPO_PUBLIC_LLM_API_URL || '').trim();
+const BLOCKED_PROVIDER_PATTERN = /openai\.com/i;
 
 /**
  * PRIVACY GUARANTEE:
@@ -23,7 +23,7 @@ export async function analyzeContract(
   onPayloadReady?: (payload: string) => void,
   onAuditInfo?: (info: { timestamp: string; endpoint: string; model: string; payload: string }) => void
 ): Promise<AnalysisResponseV1> {
-  if (!API_KEY) {
+  if (!API_URL) {
     // Return mock data for development
     const mock = getMockResponse(contractType);
     const validated = validateAnalysisResponse(mock, contractType);
@@ -34,6 +34,12 @@ export async function analyzeContract(
       ...validated.value,
       summary: buildStrictSummary(contractType, validated.value.summary, redactedText),
     };
+  }
+
+  if (BLOCKED_PROVIDER_PATTERN.test(API_URL)) {
+    throw new Error(
+      'Direct provider endpoints are not allowed from the client. Configure EXPO_PUBLIC_LLM_API_URL to your proxy endpoint.'
+    );
   }
 
   const prompt = buildProfiledPrompt(redactedText, contractType);
@@ -64,7 +70,7 @@ export async function analyzeContract(
     // Store audit information
     const auditInfo = {
       timestamp: new Date().toISOString(),
-      endpoint: API_URL.includes('openai') ? 'OpenAI' : 'LLM Provider',
+      endpoint: API_URL,
       model: payload.model,
       payload: bodyPretty, // Pretty-printed for readability
     };
@@ -82,7 +88,6 @@ export async function analyzeContract(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
       },
       body: bodyCompact, // Send compact version
     });
