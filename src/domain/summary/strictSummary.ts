@@ -55,6 +55,42 @@ const TIME_TOKENS = ['ΔΙΑΡΚ', 'ΠΕΡΙΟΔ', 'TERM', 'MONTH', 'ΜΗΝ', '�
 
 const MISSING_TEXT_NORMALIZED = 'ΔΕΝ ΠΡΟΚΥΠΤΕΙ ΑΠΟ ΤΟ ΚΕΙΜΕΝΟ';
 
+const EVIDENCE_RULES: Record<string, RegExp[]> = {
+  usage_term: [
+    /\b(\d{1,2})\s*\(\s*\d{1,2}\s*\)\s*ΜΗΝ/i,
+    /\bΜΗΝ(ΕΣ|Α)?\b/i,
+    /\b12\b.*\bΜΗΝ/i,
+    /ΔΙΑΡΚΕΙΑ/i,
+  ],
+  territory: [
+    /ΕΛΛΗΝΙΚ(Η|ΗΣ)\s+ΕΠΙΚΡΑΤΕΙΑ/i,
+    /\bΕΛΛΑΔ(Α|ΟΣ)\b/i,
+    /ΕΝΤΟΣ\s+ΕΛΛΑΔ/i,
+  ],
+  media_tv: [
+    /ΤΗΛΕΟΡΑΣ/i,
+    /ΤΗΛΕΟΠΤΙΚ/i,
+    /TV\b/i,
+    /ΤΗΛΕΟΠΤΙΚΟ\s+ΣΠΟΤ/i,
+  ],
+  exclusivity: [
+    /ΑΠΟΚΛΕΙΣΤ/i,
+    /ΜΗ\s+ΣΥΜΜΕΤΑΣΧ/i,
+    /ΑΝΤΑΓΩΝΙΣΤ/i,
+  ],
+  cutdowns: [
+    /CUT\s*VERSIONS/i,
+    /ΜΟΝΤΑΖ/i,
+    /ΣΥΝΤΟΜΕΥΣ/i,
+    /ΤΕΧΝΙΚ(ΕΣ|Η)\s+ΠΡΟΣΑΡΜΟΓ/i,
+  ],
+  fee_payment: [
+    /ΕΝΤΟΣ\s+\d+\s*\(\s*\d+\s*\)\s*ΗΜΕΡ/i,
+    /ΚΑΤΑΒΛΗΤΕΑ/i,
+    /ΗΜΕΡ(ΩΝ|ΕΣ)/i,
+  ],
+};
+
 function normalizeEvidenceText(input: string): string {
   return input
     .toUpperCase()
@@ -63,6 +99,13 @@ function normalizeEvidenceText(input: string): string {
     .replace(/[^A-Z0-9\u0370-\u03FF\u1F00-\u1FFF]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeEvidenceTextLoose(input: string): string {
+  return input
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 function normalizeForProximity(input: string): string {
@@ -94,6 +137,10 @@ function hasAllTokensInText(tokens: string[], normalizedText: string): boolean {
 
 function containsAny(normalizedText: string, tokens: string[]): boolean {
   return tokens.some(token => token.length > 0 && normalizedText.includes(token));
+}
+
+function hasAnyEvidence(textUpper: string, rules: RegExp[]): boolean {
+  return rules.some(rule => rule.test(textUpper));
 }
 
 function extractSignificantTokens(normalizedValue: string): string[] {
@@ -142,6 +189,7 @@ function hasTvcDurationEvidence(textUpper: string, value: string): boolean {
 export function hasTextEvidence(fieldId: SummaryFieldId, value: string, text: string): boolean {
   const normalizedText = normalizeEvidenceText(text);
   const normalizedValue = normalizeEvidenceText(value);
+  const evidenceTextUpper = normalizeEvidenceTextLoose(text);
 
   if (!normalizedText || !normalizedValue) {
     return false;
@@ -155,6 +203,11 @@ export function hasTextEvidence(fieldId: SummaryFieldId, value: string, text: st
   const months = extractMonthTokens(normalizedValue);
   if (months.length > 0 && !hasAllTokensInText(months, normalizedText)) {
     return false;
+  }
+
+  const evidenceRules = EVIDENCE_RULES[fieldId];
+  if (evidenceRules && hasAnyEvidence(evidenceTextUpper, evidenceRules)) {
+    return true;
   }
 
   switch (fieldId) {
@@ -272,6 +325,52 @@ export function hasTextEvidence(fieldId: SummaryFieldId, value: string, text: st
   }
 }
 
+function getFallbackSummaryValue(
+  fieldId: SummaryFieldId,
+  processedText: string,
+  evidenceTextUpper: string
+): string | null {
+  switch (fieldId) {
+    case 'usage_term': {
+      const match = processedText.match(/\b\d{1,2}\s*μ[ήη]ν(?:ες|α|ων)?\b/i);
+      if (match) {
+        return match[0].trim();
+      }
+      return 'Υπάρχει αναφορά σε διάρκεια';
+    }
+    case 'territory': {
+      if (/ΕΛΛΗΝΙΚ(Η|ΗΣ)\s+ΕΠΙΚΡΑΤΕΙΑ/.test(evidenceTextUpper)) {
+        return 'Ελληνική επικράτεια';
+      }
+      if (/\bΕΛΛΑΔ(Α|ΟΣ)\b/.test(evidenceTextUpper)) {
+        return 'Ελλάδα';
+      }
+      return 'Υπάρχει αναφορά σε περιοχή χρήσης';
+    }
+    case 'media_tv': {
+      if (/ΤΗΛΕΟΡΑΣ|ΤΗΛΕΟΠΤΙΚ|TV\b/.test(evidenceTextUpper)) {
+        return 'Τηλεόραση';
+      }
+      return 'Υπάρχει αναφορά σε τηλεοπτικά μέσα';
+    }
+    case 'exclusivity': {
+      return 'Υπάρχει αναφορά σε αποκλειστικότητα';
+    }
+    case 'cutdowns': {
+      return 'Υπάρχει αναφορά σε cutdowns/μοντάζ';
+    }
+    case 'fee_payment': {
+      const match = processedText.match(/εντός\s+\d+\s*(?:\(\s*\d+\s*\)\s*)?ημε\w*/i);
+      if (match) {
+        return match[0].trim();
+      }
+      return 'Υπάρχει αναφορά σε χρόνο πληρωμής';
+    }
+    default:
+      return null;
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
@@ -291,6 +390,7 @@ export function buildStrictSummary(
   });
 
   const inputSummary = isRecord(modelSummary) ? modelSummary : {};
+  const evidenceTextUpper = normalizeEvidenceTextLoose(processedText);
 
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
     Object.keys(inputSummary)
@@ -302,7 +402,27 @@ export function buildStrictSummary(
 
   summaryFields.forEach(field => {
     const rawValue = inputSummary[field.id];
+    const evidenceRules = EVIDENCE_RULES[field.id];
+    const hasRuleMatch = evidenceRules ? hasAnyEvidence(evidenceTextUpper, evidenceRules) : false;
+    const applyFallbackIfAvailable = () => {
+      if (!hasRuleMatch) {
+        return false;
+      }
+      const fallbackValue = getFallbackSummaryValue(field.id, processedText, evidenceTextUpper);
+      if (!fallbackValue) {
+        return false;
+      }
+      summary[field.id] = fallbackValue;
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.log('[Summary Evidence] Accepted', { fieldId: field.id, reason: 'rule-match-fallback' });
+      }
+      return true;
+    };
+
     if (typeof rawValue !== 'string') {
+      if (applyFallbackIfAvailable()) {
+        return;
+      }
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.log('[Summary Evidence] Rejected', { fieldId: field.id, reason: 'empty' });
       }
@@ -310,6 +430,9 @@ export function buildStrictSummary(
     }
     const trimmed = rawValue.trim();
     if (!trimmed) {
+      if (applyFallbackIfAvailable()) {
+        return;
+      }
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.log('[Summary Evidence] Rejected', { fieldId: field.id, reason: 'empty' });
       }
@@ -317,6 +440,9 @@ export function buildStrictSummary(
     }
     const normalizedValue = normalizeEvidenceText(trimmed);
     if (normalizedValue === MISSING_TEXT_NORMALIZED) {
+      if (applyFallbackIfAvailable()) {
+        return;
+      }
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.log('[Summary Evidence] Rejected', { fieldId: field.id, reason: 'missing_value' });
       }
@@ -333,7 +459,7 @@ export function buildStrictSummary(
 
     summary[field.id] = trimmed;
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.log('[Summary Evidence] Accepted', { fieldId: field.id });
+      console.log('[Summary Evidence] Accepted', { fieldId: field.id, reason: hasRuleMatch ? 'rule-match' : 'strict' });
     }
   });
 
