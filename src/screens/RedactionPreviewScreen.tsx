@@ -7,7 +7,7 @@ import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
 import { getContractTypeLabel } from '../domain/contractType/contractTypes';
 import { detectMultiContractLikelihood } from '../domain/analysis/multiContractHeuristics';
-import { hasAnyUnredactedEntities } from '../utils/privacyValidation';
+import { hasAnyUnredactedEntities, detectSuspiciousUnredactedPatterns } from '../utils/privacyValidation';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'RedactionPreview'>;
 
@@ -60,11 +60,43 @@ export default function RedactionPreviewScreen() {
       return;
     }
 
-    const redactionCheck = hasAnyUnredactedEntities(originalText, redactedText, detectedEntities);
-    if (!redactionCheck.ok) {
+    const entitiesGate = hasAnyUnredactedEntities(originalText, redactedText, detectedEntities);
+    const suspiciousGate = detectSuspiciousUnredactedPatterns(redactedText);
+    const shouldBlock = !entitiesGate.ok || !suspiciousGate.ok;
+    if (shouldBlock) {
+      const reasonLabels = new Set<string>();
+      const typeToReason = (type: string) => {
+        switch (type) {
+          case 'PERSON':
+          case 'COMPANY':
+            return 'ΟΝΟΜΑ/ΕΤΑΙΡΕΙΑ';
+          case 'EMAIL':
+            return 'EMAIL';
+          case 'PHONE':
+            return 'ΤΗΛΕΦΩΝΟ';
+          case 'IBAN':
+            return 'IBAN';
+          case 'TAX_ID':
+            return 'ΑΦΜ';
+          case 'ADDRESS':
+          case 'ADDRESS_NUMBER':
+            return 'ΔΙΕΥΘΥΝΣΗ';
+          default:
+            return 'ΛΟΙΠΑ ΣΤΟΙΧΕΙΑ';
+        }
+      };
+
+      entitiesGate.offendingTypes.forEach(type => reasonLabels.add(typeToReason(type)));
+      suspiciousGate.reasons.forEach(reason => reasonLabels.add(reason));
+
+      const reasonList = Array.from(reasonLabels).slice(0, 2);
+      const reasonText = reasonList.length
+        ? `\n\nΠιθανά μη ανωνυμοποιημένα στοιχεία:\n• ${reasonList.join('\n• ')}`
+        : '';
+
       Alert.alert(
         'Προσοχή',
-        'Εντοπίστηκαν στοιχεία που δεν έχουν ανωνυμοποιηθεί πλήρως. Παρακαλούμε ελέγξτε το κείμενο πριν συνεχίσετε.',
+        `Εντοπίστηκαν στοιχεία που δεν έχουν ανωνυμοποιηθεί πλήρως. Παρακαλούμε ελέγξτε το κείμενο πριν συνεχίσετε.${reasonText}`,
         [{ text: 'Επιστροφή στην Προεπισκόπηση', style: 'cancel' }]
       );
       return;

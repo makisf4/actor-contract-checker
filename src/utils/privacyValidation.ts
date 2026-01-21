@@ -110,6 +110,88 @@ export function hasAnyUnredactedEntities(
 }
 
 /**
+ * Fail-closed suspicious pattern detection for redacted text.
+ * Blocks remote analysis if high-risk patterns remain unredacted.
+ */
+export function detectSuspiciousUnredactedPatterns(
+  redactedText: string
+): { ok: boolean; reasons: string[] } {
+  if (!redactedText) {
+    return { ok: true, reasons: [] };
+  }
+
+  const reasons = new Set<string>();
+  const placeholderPattern = /X{6,}/;
+  const lines = redactedText.split(/\r?\n/);
+
+  const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+  const ibanPattern = /\bGR\d{2}[A-Z0-9]{11,30}\b/i;
+  const phonePattern = /\b69\d{8}\b|\b2\d{9}\b/;
+  const afmPattern = /(?:ΑΦΜ.{0,10}\b\d{9}\b|\b\d{9}\b.{0,10}ΑΦΜ)/i;
+
+  if (emailPattern.test(redactedText)) {
+    reasons.add('EMAIL');
+  }
+  if (ibanPattern.test(redactedText)) {
+    reasons.add('IBAN');
+  }
+  if (phonePattern.test(redactedText)) {
+    reasons.add('ΤΗΛΕΦΩΝΟ');
+  }
+  if (afmPattern.test(redactedText)) {
+    reasons.add('ΑΦΜ');
+  }
+
+  const companySuffixPattern = /\b(Α\.Ε\.|ΑΕ|ΕΠΕ|ΙΚΕ|ΟΕ|ΕΕ|LTD|LLC|INC|S\.A\.|SA)\b/i;
+  const addressCuePattern = /\b(ΟΔΟΣ|ΟΔ\.|ΤΚ|Τ\.Κ\.|ΑΡΙΘΜ|ΑΡ\.|ΛΕΩΦ)\b[^0-9]{0,10}\d{1,4}\b/i;
+
+  for (const line of lines) {
+    if (placeholderPattern.test(line)) {
+      continue;
+    }
+    if (companySuffixPattern.test(line)) {
+      reasons.add('ΕΤΑΙΡΕΙΑ');
+    }
+    if (addressCuePattern.test(line)) {
+      reasons.add('ΔΙΕΥΘΥΝΣΗ');
+    }
+  }
+
+  const uppercaseSequencePattern = /\b[Α-ΩΆΈΉΊΌΎΏA-Z]{2,}(?:\s+[Α-ΩΆΈΉΊΌΎΏA-Z]{2,}){1,2}\b/g;
+  const headingTerms = new Set([
+    'ΑΡΘΡΟ', 'ΚΕΦΑΛΑΙΟ', 'ΠΑΡΑΡΤΗΜΑ', 'ΣΥΜΒΑΣΗ', 'ΣΥΜΒΑΣΗΣ', 'ΣΥΜΦΩΝΙΑ',
+    'ΟΡΟΙ', 'ΟΡΟΣ', 'ΑΝΤΙΚΕΙΜΕΝΟ', 'ΔΙΑΡΚΕΙΑ', 'ΑΜΟΙΒΗ', 'ΠΛΗΡΩΜΗ',
+    'ΛΥΣΗ', 'ΚΑΤΑΓΓΕΛΙΑ', 'ΥΠΟΧΡΕΩΣΕΙΣ', 'ΔΙΚΑΙΩΜΑΤΑ', 'ΠΡΟΟΙΜΙΟ',
+    'ΤΕΛΙΚΕΣ', 'ΔΙΑΤΑΞΕΙΣ', 'ΕΜΠΙΣΤΕΥΤΙΚΟΤΗΤΑ', 'ΠΡΟΣΤΑΣΙΑ', 'ΔΕΔΟΜΕΝΩΝ',
+    'ΡΗΤΡΑ', 'ΡΗΤΡΕΣ', 'ΥΠΟΓΡΑΦΕΣ', 'ΟΡΙΣΜΟΙ', 'ΣΚΟΠΟΣ', 'ΕΥΘΥΝΗ',
+    'ΔΙΑΦΟΡΕΣ', 'ΕΦΑΡΜΟΣΤΕΟ', 'ΔΙΚΑΙΟ', 'ΠΑΡΑΔΟΣΗ', 'ΕΝΑΡΞΗ',
+    'ARTICLE', 'TERMS', 'AGREEMENT', 'CONTRACT', 'CHAPTER', 'APPENDIX',
+    'SIGNATURES', 'SCOPE', 'DURATION', 'PAYMENT', 'TERMINATION',
+  ]);
+
+  for (const line of lines) {
+    if (placeholderPattern.test(line)) {
+      continue;
+    }
+    uppercaseSequencePattern.lastIndex = 0;
+    let match;
+    while ((match = uppercaseSequencePattern.exec(line)) !== null) {
+      const words = match[0].split(/\s+/);
+      if (words.some(word => headingTerms.has(word))) {
+        continue;
+      }
+      reasons.add('ΟΝΟΜΑ/ΕΤΑΙΡΕΙΑ');
+      break;
+    }
+    if (reasons.has('ΟΝΟΜΑ/ΕΤΑΙΡΕΙΑ')) {
+      break;
+    }
+  }
+
+  return { ok: reasons.size === 0, reasons: Array.from(reasons) };
+}
+
+/**
  * Collects issues with unredacted content (for debugging/logging)
  */
 export function collectUnredactedIssues(
