@@ -6,7 +6,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
 import { analyzeContract } from '../utils/llmAdapter';
-import { hasAnyUnredactedEntities, detectSuspiciousUnredactedPatterns } from '../utils/privacyValidation';
+import { hasAnyUnredactedEntities, detectSuspiciousUnredactedPatterns, hasUnredactedResiduals } from '../utils/privacyValidation';
 import { getFinalContractType } from '../domain/contractType/getFinalContractType';
 import { schemaForContractType } from '../domain/summary/summarySchemas';
 import { ContractTypeId } from '../domain/contractType/contractTypes';
@@ -52,7 +52,8 @@ export default function AnalyzeScreen() {
         // PRIVACY GUARDRAIL: Never send text if redaction is not 100% safe
         const entitiesGate = hasAnyUnredactedEntities(originalText, redactedText, detectedEntities);
         const suspiciousGate = detectSuspiciousUnredactedPatterns(redactedText);
-        const shouldBlock = !entitiesGate.ok || !suspiciousGate.ok;
+        const residualsGate = hasUnredactedResiduals(originalText, redactedText);
+        const shouldBlock = !entitiesGate.ok || !suspiciousGate.ok || !residualsGate.ok;
         if (shouldBlock) {
           const reasonLabels = new Set<string>();
           const typeToReason = (type: string) => {
@@ -77,6 +78,7 @@ export default function AnalyzeScreen() {
 
           entitiesGate.offendingTypes.forEach(type => reasonLabels.add(typeToReason(type)));
           suspiciousGate.reasons.forEach(reason => reasonLabels.add(reason));
+          residualsGate.reasons.forEach(reason => reasonLabels.add(reason));
 
           const reasonList = Array.from(reasonLabels).slice(0, 2);
           const reasonText = reasonList.length

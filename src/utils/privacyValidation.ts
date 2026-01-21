@@ -251,6 +251,128 @@ export function detectSuspiciousUnredactedPatterns(
 }
 
 /**
+ * Authoritative residual check: compares original vs final text
+ * and blocks if probable personal/company phrases remain unredacted.
+ */
+export function hasUnredactedResiduals(
+  originalText: string,
+  finalText: string
+): { ok: boolean; reasons: string[] } {
+  if (!originalText || !finalText) {
+    return { ok: true, reasons: [] };
+  }
+
+  const reasons = new Set<string>();
+  const candidates = new Map<string, string>();
+
+  const normalizeForSearch = (value: string) => (
+    value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\u0370-\u03FF\u1F00-\u1FFF\s]+/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+
+  const normalizedFinal = normalizeForSearch(finalText);
+  const placeholderPattern = /X{6,}/g;
+  const preambleIndex = originalText.search(/^\s*ΑΡΘΡΟ\s+1\b/im);
+
+  const allowedPhrases = new Set([
+    'ελλαδα',
+    'αθηνα',
+    'ευρωπαϊκη ενωση',
+    'ευρωπαϊκης ενωσης',
+    'ελληνικη δημοκρατια',
+    'ελληνικης δημοκρατιας',
+  ]);
+
+  const headingTerms = new Set([
+    'ΑΡΘΡΟ', 'ΚΕΦΑΛΑΙΟ', 'ΠΑΡΑΡΤΗΜΑ', 'ΣΥΜΒΑΣΗ', 'ΣΥΜΒΑΣΗΣ', 'ΣΥΜΦΩΝΙΑ',
+    'ΟΡΟΙ', 'ΟΡΟΣ', 'ΑΝΤΙΚΕΙΜΕΝΟ', 'ΔΙΑΡΚΕΙΑ', 'ΑΜΟΙΒΗ', 'ΠΛΗΡΩΜΗ',
+    'ΛΥΣΗ', 'ΚΑΤΑΓΓΕΛΙΑ', 'ΥΠΟΧΡΕΩΣΕΙΣ', 'ΔΙΚΑΙΩΜΑΤΑ', 'ΠΡΟΟΙΜΙΟ',
+    'ΤΕΛΙΚΕΣ', 'ΔΙΑΤΑΞΕΙΣ', 'ΕΜΠΙΣΤΕΥΤΙΚΟΤΗΤΑ', 'ΠΡΟΣΤΑΣΙΑ', 'ΔΕΔΟΜΕΝΩΝ',
+    'ΡΗΤΡΑ', 'ΡΗΤΡΕΣ', 'ΥΠΟΓΡΑΦΕΣ', 'ΟΡΙΣΜΟΙ', 'ΣΚΟΠΟΣ', 'ΕΥΘΥΝΗ',
+    'ΔΙΑΦΟΡΕΣ', 'ΕΦΑΡΜΟΣΤΕΟ', 'ΔΙΚΑΙΟ', 'ΠΑΡΑΔΟΣΗ', 'ΕΝΑΡΞΗ',
+    'ARTICLE', 'TERMS', 'AGREEMENT', 'CONTRACT', 'CHAPTER', 'APPENDIX',
+    'SIGNATURES', 'SCOPE', 'DURATION', 'PAYMENT', 'TERMINATION',
+  ]);
+
+  const titleCaseWord = '[Α-ΩΆΈΉΊΌΎΏA-Z][α-ωάέήίόύώa-z]+';
+  const titleCasePattern = new RegExp(`\\b${titleCaseWord}(?:\\s+${titleCaseWord}){1,3}\\b`, 'g');
+  const allCapsPattern = /\b[Α-ΩΆΈΉΊΌΎΏA-Z]{2,}(?:\s+[Α-ΩΆΈΉΊΌΎΏA-Z]{2,}){1,4}\b/g;
+  const companySuffixPattern = /\b((?:[Α-ΩΆΈΉΊΌΎΏA-Z][\wΆΈΉΊΌΎΏάέήίόύώ.\-']+(?:\s+[Α-ΩΆΈΉΊΌΎΏA-Z][\wΆΈΉΊΌΎΏάέήίόύώ.\-']+){0,4})\s+(Α\.Ε\.|ΑΕ|ΕΠΕ|ΙΚΕ|ΟΕ|ΕΕ|LTD|LLC|INC|S\.A\.|SA))\b/gi;
+  const cuePattern = /(ηθοποι|καλλιτεχν|ερμηνευτ|παραγωγ|εταιρε|μεταξυ|\bτου\b|\bτης\b)/i;
+
+  const addCandidate = (raw: string, reason: string) => {
+    if (!raw || placeholderPattern.test(raw)) {
+      return;
+    }
+    const normalized = normalizeForSearch(raw);
+    if (!normalized) {
+      return;
+    }
+    if (allowedPhrases.has(normalized)) {
+      return;
+    }
+    if (normalized.split(' ').length < 2) {
+      return;
+    }
+    candidates.set(normalized, reason);
+  };
+
+  // Title-Case sequences (2-4 words) with cue or in preamble
+  titleCasePattern.lastIndex = 0;
+  let match;
+  while ((match = titleCasePattern.exec(originalText)) !== null) {
+    const raw = match[0];
+    const windowStart = Math.max(0, match.index - 80);
+    const windowEnd = Math.min(originalText.length, match.index + raw.length + 80);
+    const window = originalText.slice(windowStart, windowEnd);
+    const isPreamble = preambleIndex !== -1 && match.index < preambleIndex;
+    if (isPreamble || cuePattern.test(window)) {
+      addCandidate(raw, 'ΠΙΘΑΝΟ ΟΝΟΜΑ');
+    }
+  }
+
+  // ALL-CAPS sequences (2-5 words) with cue or in preamble
+  allCapsPattern.lastIndex = 0;
+  while ((match = allCapsPattern.exec(originalText)) !== null) {
+    const raw = match[0];
+    const words = raw.split(/\s+/);
+    if (words.some(word => headingTerms.has(word))) {
+      continue;
+    }
+    const windowStart = Math.max(0, match.index - 80);
+    const windowEnd = Math.min(originalText.length, match.index + raw.length + 80);
+    const window = originalText.slice(windowStart, windowEnd);
+    const isPreamble = preambleIndex !== -1 && match.index < preambleIndex;
+    if (isPreamble || cuePattern.test(window)) {
+      addCandidate(raw, 'ΠΙΘΑΝΟ ΟΝΟΜΑ');
+    }
+  }
+
+  // Company suffix sequences (1-5 words + suffix)
+  companySuffixPattern.lastIndex = 0;
+  while ((match = companySuffixPattern.exec(originalText)) !== null) {
+    const raw = match[0];
+    addCandidate(raw, 'ΠΙΘΑΝΗ ΕΤΑΙΡΕΙΑ');
+  }
+
+  for (const [candidate, reason] of candidates.entries()) {
+    if (!candidate) {
+      continue;
+    }
+    if (normalizedFinal.includes(candidate)) {
+      reasons.add(reason);
+    }
+  }
+
+  return { ok: reasons.size === 0, reasons: Array.from(reasons) };
+}
+
+/**
  * Collects issues with unredacted content (for debugging/logging)
  */
 export function collectUnredactedIssues(

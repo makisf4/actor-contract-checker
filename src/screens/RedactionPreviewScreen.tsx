@@ -7,7 +7,7 @@ import { RootStackParamList } from '../../App';
 import { useAppContext } from '../context/AppContext';
 import { getContractTypeLabel } from '../domain/contractType/contractTypes';
 import { detectMultiContractLikelihood } from '../domain/analysis/multiContractHeuristics';
-import { hasAnyUnredactedEntities, detectSuspiciousUnredactedPatterns } from '../utils/privacyValidation';
+import { hasAnyUnredactedEntities, detectSuspiciousUnredactedPatterns, hasUnredactedResiduals } from '../utils/privacyValidation';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'RedactionPreview'>;
 
@@ -62,7 +62,8 @@ export default function RedactionPreviewScreen() {
 
     const entitiesGate = hasAnyUnredactedEntities(originalText, redactedText, detectedEntities);
     const suspiciousGate = detectSuspiciousUnredactedPatterns(redactedText);
-    const shouldBlock = !entitiesGate.ok || !suspiciousGate.ok;
+    const residualsGate = hasUnredactedResiduals(originalText, redactedText);
+    const shouldBlock = !entitiesGate.ok || !suspiciousGate.ok || !residualsGate.ok;
     if (shouldBlock) {
       const reasonLabels = new Set<string>();
       const typeToReason = (type: string) => {
@@ -87,6 +88,7 @@ export default function RedactionPreviewScreen() {
 
       entitiesGate.offendingTypes.forEach(type => reasonLabels.add(typeToReason(type)));
       suspiciousGate.reasons.forEach(reason => reasonLabels.add(reason));
+      residualsGate.reasons.forEach(reason => reasonLabels.add(reason));
 
       const reasonList = Array.from(reasonLabels).slice(0, 2);
       const reasonText = reasonList.length
