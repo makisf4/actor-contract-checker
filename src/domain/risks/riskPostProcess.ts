@@ -67,6 +67,12 @@ const VOICE_CLONING_EVIDENCE = [
   /ΚΛΩΝ/i,
 ];
 
+const RISK_EVIDENCE_BY_ID: Record<string, RegExp[]> = {
+  exclusivity: EXCLUSIVITY_EVIDENCE,
+  termination: TERMINATION_EVIDENCE,
+  cut_versions_reuse: CUTDOWNS_EVIDENCE,
+};
+
 const UNLIMITED_KEYWORDS = [
   'ΑΠΕΡΙΟΡΙΣΤ',
   'ΑΙΩΝΙ',
@@ -123,6 +129,14 @@ function hasAny(text: string, patterns: Array<string | RegExp>): boolean {
   return patterns.some(pattern => (
     typeof pattern === 'string' ? text.includes(pattern) : pattern.test(text)
   ));
+}
+
+function hasEvidenceForRiskId(riskId: string, textUpper: string): boolean {
+  const rules = RISK_EVIDENCE_BY_ID[riskId];
+  if (!rules) {
+    return true;
+  }
+  return rules.some(rule => rule.test(textUpper));
 }
 
 const SEVERITY_ORDER: Severity[] = ['moderate', 'important', 'critical'];
@@ -286,6 +300,11 @@ export function postProcessRisks(args: PostProcessArgs): RiskItem[] {
     let include = true;
     let nextSeverity = risk.severity;
     let reason = 'unchanged';
+
+    if (!hasEvidenceForRiskId(risk.id, textUpper)) {
+      logDrop(risk.id, 'no-evidence');
+      continue;
+    }
 
     switch (risk.id) {
       case 'buyout': {
