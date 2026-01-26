@@ -142,7 +142,7 @@ The analysis prioritizes:
 
 ## Tech Stack
 
-- **Expo** (~51.0.0) - Development platform
+- **Expo** (~54.0.32) - Development platform
 - **React Native** (0.74.5) - Mobile framework
 - **TypeScript** - Type safety
 - **React Navigation** - Screen navigation
@@ -251,6 +251,10 @@ OPENAI_API_URL=<PROVIDER_API_URL>
 - **iOS:** `npm run ios`
 - **Android:** `npm run android`
 - **Web:** `npm run web`
+
+### Troubleshooting
+
+- **Port 8081 in use:** If port 8081 is already in use, Expo CLI may prompt you to use another port (e.g., 8083). This is fine—just accept the prompt and continue.
 
 ---
 
