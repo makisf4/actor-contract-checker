@@ -76,7 +76,13 @@ function main(): void {
     const status = r.ok ? 'PASS' : 'FAIL';
     // IMPORTANT: No raw content or entity values are printed.
     const types = r.offendingTypes.length > 0 ? `, offendingTypes: ${r.offendingTypes.join(',')}` : '';
-    console.log(`${status} ${r.file} (entities: ${r.entitiesDetected}, suspiciousPatterns: ${r.suspiciousPatternDetected ? 'yes' : 'no'}, unredactedLeak: ${r.unredactedEntityDetected ? 'yes' : 'no'}${types})`);
+    const counts = Object.entries(r.offendingCounts)
+      .filter(([, n]) => n > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${k}=${n}`)
+      .join(', ');
+    const countsText = counts ? `, offendingCounts: ${counts}` : '';
+    console.log(`${status} ${r.file} (entities: ${r.entitiesDetected}, suspiciousPatterns: ${r.suspiciousPatternDetected ? 'yes' : 'no'}, unredactedLeak: ${r.unredactedEntityDetected ? 'yes' : 'no'}${types}${countsText})`);
   }
 
   const failed = results.filter(r => !r.ok);
