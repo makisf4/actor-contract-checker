@@ -27,7 +27,7 @@ export function testCase1(): boolean {
   
   // Should skip preamble and start from "Άρθρο 1 – ΑΝΤΙΚΕΙΜΕΝΟ"
   const expected = result.skipped === true && 
-                   result.startReason?.includes('ΑΝΤΙΚΕΙΜΕΝΟ') &&
+                   result.startReason?.includes('ΑΝΤΙΚΕΙΜΕΝΟ') === true &&
                    result.text.includes('Άρθρο 1 – ΑΝΤΙΚΕΙΜΕΝΟ') &&
                    !result.text.includes('ΣΥΜΒΑΛΛΟΜΕΝΑ ΜΕΡΗ') &&
                    !result.text.includes('Κρήτης');

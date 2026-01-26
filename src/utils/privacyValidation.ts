@@ -181,7 +181,7 @@ export function detectSuspiciousUnredactedPatterns(
     }
 
     titleCaseNamePattern.lastIndex = 0;
-    let nameMatch;
+    let nameMatch: RegExpExecArray | null;
     while ((nameMatch = titleCaseNamePattern.exec(lineForScan)) !== null) {
       const normalized = normalizeForAllowlist(nameMatch[0]);
       if (allowedTitlePhrases.has(normalized)) {
@@ -199,7 +199,7 @@ export function detectSuspiciousUnredactedPatterns(
 
     if (!reasons.has('ΠΙΘΑΝΗ ΕΤΑΙΡΕΙΑ') && companyKeywordPattern.test(lineForScan)) {
       titleCaseCompanyPattern.lastIndex = 0;
-      let companyMatch;
+      let companyMatch: RegExpExecArray | null;
       while ((companyMatch = titleCaseCompanyPattern.exec(lineForScan)) !== null) {
         const normalized = normalizeForAllowlist(companyMatch[0]);
         if (allowedTitlePhrases.has(normalized)) {
@@ -229,7 +229,7 @@ export function detectSuspiciousUnredactedPatterns(
       continue;
     }
     uppercaseSequencePattern.lastIndex = 0;
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = uppercaseSequencePattern.exec(lineForScan)) !== null) {
       const words = match[0].split(/\s+/);
       const normalized = normalizeForAllowlist(match[0]);
@@ -324,7 +324,7 @@ export function hasUnredactedResiduals(
 
   // Title-Case sequences (2-4 words) with cue or in preamble
   titleCasePattern.lastIndex = 0;
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = titleCasePattern.exec(originalText)) !== null) {
     const raw = match[0];
     const windowStart = Math.max(0, match.index - 80);

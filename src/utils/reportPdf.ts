@@ -134,8 +134,9 @@ export async function saveReportPdf(args: {
   const { uri } = await Print.printToFileAsync({ html });
   const counter = await getNextCounter();
   const fileName = `actor_contract_check_${formatCounter(counter)}.pdf`;
-  const targetUri = FileSystem.cacheDirectory
-    ? `${FileSystem.cacheDirectory}${fileName}`
+  const cacheDir = (FileSystem as any).cacheDirectory as string | null | undefined;
+  const targetUri = cacheDir
+    ? `${cacheDir}${fileName}`
     : uri;
 
   if (uri !== targetUri) {

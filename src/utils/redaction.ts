@@ -55,7 +55,7 @@ export function detectEntities(text: string): DetectedEntity[] {
   const entities: DetectedEntity[] = [];
 
   // Email
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = EMAIL_REGEX.exec(text)) !== null) {
     entities.push({
       type: 'EMAIL',
@@ -237,9 +237,10 @@ export function detectEntities(text: string): DetectedEntity[] {
   allCapsPattern.lastIndex = 0;
   while ((match = allCapsPattern.exec(text)) !== null) {
     const matchedText = match[0];
+    const matchIndex = match.index;
     // Check context around the match
-    const beforeContext = text.substring(Math.max(0, match.index - 30), match.index);
-    const afterContext = text.substring(match.index + matchedText.length, Math.min(text.length, match.index + matchedText.length + 30));
+    const beforeContext = text.substring(Math.max(0, matchIndex - 30), matchIndex);
+    const afterContext = text.substring(matchIndex + matchedText.length, Math.min(text.length, matchIndex + matchedText.length + 30));
     const context = beforeContext + afterContext;
     
     // Only if near corporate keywords or quotes
@@ -247,14 +248,14 @@ export function detectEntities(text: string): DetectedEntity[] {
         context.includes('«') || context.includes('"') || context.includes("'")) {
       // Avoid matching if it's already detected or if it's too short
       const isOverlap = entities.some(e => 
-        match.index < e.endIndex && match.index + matchedText.length > e.startIndex
+        matchIndex < e.endIndex && matchIndex + matchedText.length > e.startIndex
       );
       if (!isOverlap && matchedText.length >= 4) {
         entities.push({
           type: 'COMPANY',
           value: matchedText,
-          startIndex: match.index,
-          endIndex: match.index + matchedText.length,
+          startIndex: matchIndex,
+          endIndex: matchIndex + matchedText.length,
         });
       }
     }
@@ -297,12 +298,14 @@ export function detectEntities(text: string): DetectedEntity[] {
   // Additional detection: Creator names after "του/της" with work context
   // Pattern: του/της + capitalized name, with work context in same sentence
   const creatorPattern = /(?:^|\.|!|\?)\s*(?:του|της)\s+([Α-ΩA-Z][α-ωa-zΑ-ΩA-Z]+(?:\s+[Α-ΩA-Z][α-ωa-zΑ-ΩA-Z]+)+)/g;
-  let creatorMatch;
+  let creatorMatch: RegExpExecArray | null;
   creatorPattern.lastIndex = 0;
   while ((creatorMatch = creatorPattern.exec(text)) !== null) {
     const creatorName = creatorMatch[1];
-    const matchStart = creatorMatch.index;
-    const matchEnd = matchStart + creatorMatch[0].length;
+    const creatorMatchIndex = creatorMatch.index;
+    const creatorMatchFull = creatorMatch[0];
+    const matchStart = creatorMatchIndex;
+    const matchEnd = matchStart + creatorMatchFull.length;
     
     // Check for work context within 200 characters (same sentence)
     const contextStart = Math.max(0, matchStart - 100);
@@ -321,13 +324,14 @@ export function detectEntities(text: string): DetectedEntity[] {
     
     if (hasWorkContext && !isLegalPhrase && !isAllLowercaseGreek) {
       // Check if not already detected
+      const nameStartOffset = creatorMatchFull.indexOf(creatorName);
       const isAlreadyDetected = entities.some(e => 
-        creatorMatch.index + creatorMatch[0].indexOf(creatorName) >= e.startIndex &&
-        creatorMatch.index + creatorMatch[0].indexOf(creatorName) + creatorName.length <= e.endIndex
+        creatorMatchIndex + nameStartOffset >= e.startIndex &&
+        creatorMatchIndex + nameStartOffset + creatorName.length <= e.endIndex
       );
       
       if (!isAlreadyDetected) {
-        const nameStart = creatorMatch.index + creatorMatch[0].indexOf(creatorName);
+        const nameStart = creatorMatchIndex + nameStartOffset;
         entities.push({
           type: 'PERSON',
           value: creatorName,
@@ -364,18 +368,20 @@ export function detectEntities(text: string): DetectedEntity[] {
     brandPattern.lastIndex = 0;
     
     while ((match = brandPattern.exec(text)) !== null) {
+      const matchIndex = match.index;
+      const matchValue = match[0];
       // Check if this position is already covered by a detected entity
       const isCovered = entities.some(e => 
-        match.index >= e.startIndex && match.index < e.endIndex
+        matchIndex >= e.startIndex && matchIndex < e.endIndex
       );
       
       // Only add if not covered and if it's a standalone word (not part of a larger phrase)
       if (!isCovered) {
         entities.push({
           type: 'COMPANY',
-          value: match[0],
-          startIndex: match.index,
-          endIndex: match.index + match[0].length,
+          value: matchValue,
+          startIndex: matchIndex,
+          endIndex: matchIndex + matchValue.length,
         });
       }
     }
@@ -575,7 +581,7 @@ function redactFullAddresses(text: string): string {
   const matches: Array<{ index: number; length: number; text: string }> = [];
   
   // Test Pattern 1: Address in parentheses
-  let match;
+  let match: RegExpExecArray | null;
   addressInParensPattern.lastIndex = 0;
   while ((match = addressInParensPattern.exec(redacted)) !== null) {
     const matchText = match[0];
@@ -593,15 +599,16 @@ function redactFullAddresses(text: string): string {
   addressWithContextPattern.lastIndex = 0;
   while ((match = addressWithContextPattern.exec(redacted)) !== null) {
     const matchText = match[0];
+    const matchIndex = match.index;
     // Skip if already matched by Pattern 1 or if it's a date/percentage
     const isOverlap = matches.some(m => 
-      match.index >= m.index && match.index < m.index + m.length
+      matchIndex >= m.index && matchIndex < m.index + m.length
     );
     if (!isOverlap && !/^\d{4}$/.test(matchText) && !/%/.test(matchText)) {
       matches.push({
-        index: match.index,
-        length: match[0].length,
-        text: match[0],
+        index: matchIndex,
+        length: matchText.length,
+        text: matchText,
       });
     }
   }
@@ -610,15 +617,16 @@ function redactFullAddresses(text: string): string {
   addressWithArPattern.lastIndex = 0;
   while ((match = addressWithArPattern.exec(redacted)) !== null) {
     const matchText = match[0];
+    const matchIndex = match.index;
     // Skip if already matched
     const isOverlap = matches.some(m => 
-      match.index >= m.index && match.index < m.index + m.length
+      matchIndex >= m.index && matchIndex < m.index + m.length
     );
     if (!isOverlap && !/^\d{4}$/.test(matchText) && !/%/.test(matchText)) {
       matches.push({
-        index: match.index,
-        length: match[0].length,
-        text: match[0],
+        index: matchIndex,
+        length: matchText.length,
+        text: matchText,
       });
     }
   }
@@ -627,15 +635,16 @@ function redactFullAddresses(text: string): string {
   addressWithNumberPattern.lastIndex = 0;
   while ((match = addressWithNumberPattern.exec(redacted)) !== null) {
     const matchText = match[0];
+    const matchIndex = match.index;
     // Skip if already matched
     const isOverlap = matches.some(m => 
-      match.index >= m.index && match.index < m.index + m.length
+      matchIndex >= m.index && matchIndex < m.index + m.length
     );
     if (!isOverlap && !/^\d{4}$/.test(matchText) && !/%/.test(matchText)) {
       matches.push({
-        index: match.index,
-        length: match[0].length,
-        text: match[0],
+        index: matchIndex,
+        length: matchText.length,
+        text: matchText,
       });
     }
   }
@@ -644,15 +653,16 @@ function redactFullAddresses(text: string): string {
   addressWithContextPrefixPattern.lastIndex = 0;
   while ((match = addressWithContextPrefixPattern.exec(redacted)) !== null) {
     const matchText = match[0];
+    const matchIndex = match.index;
     // Skip if already matched
     const isOverlap = matches.some(m => 
-      match.index >= m.index && match.index < m.index + m.length
+      matchIndex >= m.index && matchIndex < m.index + m.length
     );
     if (!isOverlap && !/^\d{4}$/.test(matchText) && !/%/.test(matchText)) {
       matches.push({
-        index: match.index,
-        length: match[0].length,
-        text: match[0],
+        index: matchIndex,
+        length: matchText.length,
+        text: matchText,
       });
     }
   }
@@ -661,15 +671,16 @@ function redactFullAddresses(text: string): string {
   generalAddressPattern.lastIndex = 0;
   while ((match = generalAddressPattern.exec(redacted)) !== null) {
     const matchText = match[0];
+    const matchIndex = match.index;
     // Skip if already matched
     const isOverlap = matches.some(m => 
-      match.index >= m.index && match.index < m.index + m.length
+      matchIndex >= m.index && matchIndex < m.index + m.length
     );
     if (!isOverlap && !/^\d{4}$/.test(matchText) && !/%/.test(matchText)) {
       matches.push({
-        index: match.index,
-        length: match[0].length,
-        text: match[0],
+        index: matchIndex,
+        length: matchText.length,
+        text: matchText,
       });
     }
   }
@@ -678,15 +689,16 @@ function redactFullAddresses(text: string): string {
   standaloneStreetPattern.lastIndex = 0;
   while ((match = standaloneStreetPattern.exec(redacted)) !== null) {
     const matchText = match[0];
+    const matchIndex = match.index;
     // Skip if already matched
     const isOverlap = matches.some(m => 
-      match.index >= m.index && match.index < m.index + m.length
+      matchIndex >= m.index && matchIndex < m.index + m.length
     );
     if (!isOverlap && !/^\d{4}$/.test(matchText) && !/%/.test(matchText)) {
       matches.push({
-        index: match.index,
-        length: match[0].length,
-        text: match[0],
+        index: matchIndex,
+        length: matchText.length,
+        text: matchText,
       });
     }
   }
@@ -695,6 +707,7 @@ function redactFullAddresses(text: string): string {
   cityAfterVerbPattern.lastIndex = 0;
   while ((match = cityAfterVerbPattern.exec(redacted)) !== null) {
     const matchText = match[0];
+    const matchIndex = match.index;
     // Extract city name (after verb + preposition)
     const cityMatch = matchText.match(/(?:εδρεύει|εδρεύουν|κατοίκου|κατοικεί)\s+(?:στην|στον|στη|στο|σε)\s+([Α-ΩA-Z][^\d\s]{2,30})/);
     if (cityMatch) {
@@ -707,13 +720,13 @@ function redactFullAddresses(text: string): string {
       if (!isPreserved) {
         // Skip if already matched
         const isOverlap = matches.some(m => 
-          match.index >= m.index && match.index < m.index + m.length
+          matchIndex >= m.index && matchIndex < m.index + m.length
         );
         if (!isOverlap) {
           matches.push({
-            index: match.index,
-            length: match[0].length,
-            text: match[0],
+            index: matchIndex,
+            length: matchText.length,
+            text: matchText,
           });
         }
       }
@@ -724,6 +737,7 @@ function redactFullAddresses(text: string): string {
   cityAfterPrepositionPattern.lastIndex = 0;
   while ((match = cityAfterPrepositionPattern.exec(redacted)) !== null) {
     const matchText = match[0];
+    const matchIndex = match.index;
     // Extract city name (after preposition)
     const cityMatch = matchText.match(/(?:στην|στον|στη|στο|σε|εκ|από)\s+([Α-ΩA-Z][^\d\s]{2,30})/);
     if (cityMatch) {
@@ -736,13 +750,13 @@ function redactFullAddresses(text: string): string {
       if (!isPreserved) {
         // Skip if already matched (especially by Pattern 9)
         const isOverlap = matches.some(m => 
-          match.index >= m.index && match.index < m.index + m.length
+          matchIndex >= m.index && matchIndex < m.index + m.length
         );
         if (!isOverlap) {
           matches.push({
-            index: match.index,
-            length: match[0].length,
-            text: match[0],
+            index: matchIndex,
+            length: matchText.length,
+            text: matchText,
           });
         }
       }
@@ -753,6 +767,7 @@ function redactFullAddresses(text: string): string {
   cityGenitivePattern.lastIndex = 0;
   while ((match = cityGenitivePattern.exec(redacted)) !== null) {
     const matchText = match[0];
+    const matchIndex = match.index;
     // Extract city name (after comma)
     const cityMatch = matchText.match(/,\s+([Α-ΩA-Z][α-ωa-zΑ-ΩA-Z]+(?:ης|εως|ας))/);
     if (cityMatch) {
@@ -765,13 +780,13 @@ function redactFullAddresses(text: string): string {
       if (!isPreserved) {
         // Skip if already matched
         const isOverlap = matches.some(m => 
-          match.index >= m.index && match.index < m.index + m.length
+          matchIndex >= m.index && matchIndex < m.index + m.length
         );
         if (!isOverlap) {
           matches.push({
-            index: match.index,
-            length: match[0].length,
-            text: match[0],
+            index: matchIndex,
+            length: matchText.length,
+            text: matchText,
           });
         }
       }
@@ -781,6 +796,7 @@ function redactFullAddresses(text: string): string {
   // Test Pattern 11: Δ.Ο.Υ. pattern (special handling - keep Δ.Ο.Υ., redact city)
   doyPattern.lastIndex = 0;
   while ((match = doyPattern.exec(redacted)) !== null) {
+    const matchIndex = match.index;
     const cityName = match[1];
     // Skip if it's a preserved country
     const isPreserved = preservedCountries.some(country => 
@@ -790,7 +806,7 @@ function redactFullAddresses(text: string): string {
     if (!isPreserved) {
       // Find the city name position in the match (after "Δ.Ο.Υ. ")
       const doyPrefix = 'Δ.Ο.Υ. ';
-      const cityStart = match.index + doyPrefix.length;
+      const cityStart = matchIndex + doyPrefix.length;
       const cityEnd = cityStart + cityName.length;
       // Skip if already matched
       const isOverlap = matches.some(m => 
@@ -885,7 +901,7 @@ function redactQuotedCompanyNames(text: string): string {
   
   // For each legal trigger, find quoted content that follows it
   for (const trigger of legalTriggers) {
-    let match;
+    let match: RegExpExecArray | null;
     trigger.lastIndex = 0;
     while ((match = trigger.exec(redacted)) !== null) {
       const triggerEnd = match.index + match[0].length;
@@ -982,7 +998,7 @@ function collapseAdjacentNameFragments(text: string): string {
   const matches: Array<{ index: number; length: number }> = [];
   
   // Pattern 1: Word + XXXXXX
-  let match;
+  let match: RegExpExecArray | null;
   pattern1.lastIndex = 0;
   while ((match = pattern1.exec(redacted)) !== null) {
     const word = match[1];
@@ -1130,7 +1146,7 @@ function redactTitles(text: string): string {
   
   // For each trigger, find quoted titles that follow it (within reasonable distance)
   for (const trigger of titleTriggers) {
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = trigger.exec(redacted)) !== null) {
       const triggerEnd = match.index + match[0].length;
       // Look for quoted title within 200 characters after trigger
@@ -1181,7 +1197,7 @@ function redactVenues(text: string): string {
   
   // First, redact venues after labels
   for (const labelPattern of venueLabels) {
-    let match;
+    let match: RegExpExecArray | null;
     // Reset regex for each label pattern
     labelPattern.lastIndex = 0;
     while ((match = labelPattern.exec(redacted)) !== null) {
@@ -1225,7 +1241,7 @@ function redactVenues(text: string): string {
   const matches: Array<{ index: number; text: string; length: number }> = [];
   
   // Collect all potential matches first (to avoid index shifting issues)
-  let allCapsMatch;
+  let allCapsMatch: RegExpExecArray | null;
   allCapsVenuePattern.lastIndex = 0;
   while ((allCapsMatch = allCapsVenuePattern.exec(redacted)) !== null) {
     const venueText = allCapsMatch[1].trim();
