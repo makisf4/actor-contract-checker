@@ -210,7 +210,7 @@ export default function ReportScreen() {
       }
       return { id: fieldId, ...entry };
     })
-    .filter((item): item is { id: string; title: string; why: string; ask: string; riskId?: string } => !!item)
+    .filter((item): item is { id: string; title: string; why: string; ask: string; riskId?: RiskId } => item !== null)
     .filter((item) => {
       if (item.riskId && riskSeverityById.has(item.riskId)) {
         return false;
