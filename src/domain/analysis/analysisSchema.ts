@@ -92,13 +92,11 @@ export function validateAnalysisResponse(
       if (!isString(severity) || !SEVERITIES.has(severity as Severity)) {
         return null;
       }
-      const why = isString(item.why) ? item.why : undefined;
-      const clauseRef = isString(item.clauseRef) ? item.clauseRef : undefined;
       return {
         id: id as RiskId,
         severity: severity as Severity,
-        why,
-        clauseRef,
+        ...(isString(item.why) && { why: item.why }),
+        ...(isString(item.clauseRef) && { clauseRef: item.clauseRef }),
       };
     })
     .filter((item): item is AnalysisResponseV1['riskFlags'][number] => !!item);
@@ -126,7 +124,7 @@ export function validateAnalysisResponse(
         title: item.title,
         proposed: item.proposed,
         why: item.why,
-        current: isString(item.current) ? item.current : undefined,
+        ...(isString(item.current) && { current: item.current }),
       };
     })
     .filter((item): item is AnalysisResponseV1['negotiation'][number] => !!item);
