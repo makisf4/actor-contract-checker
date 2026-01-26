@@ -1359,8 +1359,12 @@ export function redactText(text: string, entities: DetectedEntity[]): string {
       // Replace raw value with neutral placeholder - ONLY placeholders are sent to API
       redacted = redacted.slice(0, entityStartInProtected) + REDACTION_PLACEHOLDER + redacted.slice(entityEndInProtected);
     } else {
-      // Fallback: use original indices (may be slightly off if labels were protected, but should be rare)
-      redacted = redacted.slice(0, entity.startIndex) + REDACTION_PLACEHOLDER + redacted.slice(entity.endIndex);
+      // Local window search failed; search full string (prefer lastIndexOf for stability with reverse iteration)
+      const fullStringIndex = redacted.lastIndexOf(entityValue);
+      if (fullStringIndex !== -1) {
+        redacted = redacted.slice(0, fullStringIndex) + REDACTION_PLACEHOLDER + redacted.slice(fullStringIndex + entityValue.length);
+      }
+      // If still not found, skip this entity (fail-closed: privacy gate will catch unredacted content)
     }
   }
   

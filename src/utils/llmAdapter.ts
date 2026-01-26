@@ -6,6 +6,26 @@ import { buildStrictSummary } from '../domain/summary/strictSummary';
 const API_URL = (process.env.EXPO_PUBLIC_LLM_API_URL || '').trim();
 const BLOCKED_PROVIDER_PATTERN = /openai\.com/i;
 
+const SYSTEM_MESSAGE = 'Είσαι επαγγελματικός σύμβουλος που βοηθάει ηθοποιούς να αναλύουν συμβόλαια. Πάντα απαντάς ΣΤΑ ΕΛΛΗΝΙΚΑ με συμβουλευτικό τόνο. Χρησιμοποίησε φράσεις όπως "Αξίζει να διευκρινιστεί", "Θα μπορούσε να εξεταστεί", "Ίσως είναι σκόπιμο". Ποτέ μην λες "θα πρέπει να υπογράψεις" ή "αυτό είναι παράνομο". Πάντα απαντάς με έγκυρο JSON μόνο, χωρίς markdown formatting.';
+
+/**
+ * Builds the exact request body (pretty JSON) that would be sent to the proxy.
+ *
+ * SAFETY: This helper must never receive original (unredacted) text.
+ */
+export function buildAnalysisRequestBodyPretty(redactedText: string, contractType: ContractTypeId): string {
+  const prompt = buildProfiledPrompt(redactedText, contractType);
+  const payload = {
+    model: 'gpt-4',
+    messages: [
+      { role: 'system', content: SYSTEM_MESSAGE },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.3,
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
 /**
  * PRIVACY GUARANTEE:
  * This function receives ONLY redacted text (with placeholders like XXXXXX).
@@ -44,7 +64,7 @@ export async function analyzeContract(
 
   const prompt = buildProfiledPrompt(redactedText, contractType);
 
-  const systemMessage = 'Είσαι επαγγελματικός σύμβουλος που βοηθάει ηθοποιούς να αναλύουν συμβόλαια. Πάντα απαντάς ΣΤΑ ΕΛΛΗΝΙΚΑ με συμβουλευτικό τόνο. Χρησιμοποίησε φράσεις όπως "Αξίζει να διευκρινιστεί", "Θα μπορούσε να εξεταστεί", "Ίσως είναι σκόπιμο". Ποτέ μην λες "θα πρέπει να υπογράψεις" ή "αυτό είναι παράνομο". Πάντα απαντάς με έγκυρο JSON μόνο, χωρίς markdown formatting.';
+  const systemMessage = SYSTEM_MESSAGE;
 
   try {
     // PRIVACY: This payload contains ONLY redacted text with placeholders

@@ -110,6 +110,26 @@ export function hasAnyUnredactedEntities(
 }
 
 /**
+ * Returns counts of entities whose raw value still appears unredacted.
+ * SAFE: This returns only type-level counts (no raw values).
+ */
+export function getUnredactedEntityCounts(
+  originalText: string,
+  redactedText: string,
+  detectedEntities: DetectedEntity[]
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+
+  for (const entity of detectedEntities) {
+    if (isEntityValueStillPresent(entity, redactedText, originalText)) {
+      counts[entity.type] = (counts[entity.type] || 0) + 1;
+    }
+  }
+
+  return counts;
+}
+
+/**
  * Fail-closed suspicious pattern detection for redacted text.
  * Blocks remote analysis if high-risk patterns remain unredacted.
  */
