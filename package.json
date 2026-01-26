@@ -7,7 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "qa": "npx expo-doctor && npx tsc -p tsconfig.json --noEmit"
+    "qa": "npx expo-doctor && npx tsc -p tsconfig.json --noEmit",
+    "privacy:check": "tsx scripts/privacy-regression.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -38,8 +39,10 @@
     "@babel/core": "^7.20.0",
     "@expo/ngrok": "^4.1.3",
     "@types/jest": "^29.5.14",
+    "@types/node": "^25.0.10",
     "@types/react": "~19.1.10",
     "sharp": "^0.34.5",
+    "tsx": "^4.19.0",
     "typescript": "^5.1.3"
   },
   "private": true

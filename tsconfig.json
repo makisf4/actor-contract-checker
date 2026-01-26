@@ -7,6 +7,6 @@
     "resolveJsonModule": true,
     "moduleResolution": "bundler",
     "jsx": "react-native",
-    "types": ["jest"]
+    "types": ["jest", "node"]
   }
 }
